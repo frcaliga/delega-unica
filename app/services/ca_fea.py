@@ -22,7 +22,7 @@ class Autorita:
     certificato: x509.Certificate
 
 
-def crea_autorita(denominazione: str, anni: int = 10) -> Autorita:
+def crea_autorita(denominazione: str, anni: int = 10, dal: datetime | None = None) -> Autorita:
     """Autorita' di certificazione interna (non qualificata) per i certificati FEA."""
     chiave = rsa.generate_private_key(public_exponent=65537, key_size=4096)
     nome = x509.Name(
@@ -32,7 +32,7 @@ def crea_autorita(denominazione: str, anni: int = 10) -> Autorita:
             x509.NameAttribute(NameOID.COMMON_NAME, f"{denominazione} CA FEA"),
         ]
     )
-    ora = datetime.now(UTC)
+    ora = dal or datetime.now(UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(nome)
@@ -68,6 +68,7 @@ def emetti_certificato(
     nome: str,
     durata: timedelta = DURATA_CERTIFICATO,
     estensioni: list[x509.ExtensionType] | None = None,
+    dal: datetime | None = None,
 ) -> tuple[rsa.RSAPrivateKey, x509.Certificate]:
     """Nuova chiave e certificato del firmatario. La durata deve coprire l'invio all'AdE:
     i certificati devono essere validi alla data di ricezione del file."""
@@ -81,7 +82,7 @@ def emetti_certificato(
             x509.NameAttribute(NameOID.COMMON_NAME, f"{cognome} {nome}".upper()),
         ]
     )
-    ora = datetime.now(UTC)
+    ora = dal or datetime.now(UTC)
     builder = (
         x509.CertificateBuilder()
         .subject_name(soggetto)
