@@ -1,0 +1,6 @@
+certificato_https_arn = "arn:aws:acm:eu-south-1:123456789012:certificate/..."
+immagine_tag          = "2026-10-25-1"
+istanze               = 2
+db_classe             = "db.t4g.small"
+db_multi_az           = false
+sms_mittente          = "StudioRossi"

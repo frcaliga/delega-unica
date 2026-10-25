@@ -9,3 +9,8 @@ __pycache__/
 htmlcov/
 dist/
 var/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example

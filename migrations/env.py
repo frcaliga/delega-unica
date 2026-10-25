@@ -1,17 +1,19 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, text
 
 from app.config import get_settings
 from app.models import Base
 
 config = context.config
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# configparser interpreta i "%": vanno raddoppiati (compaiono nelle password codificate nell'URL)
+config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+MIGRAZIONI_LOCK = 4_321_000_024
 
 
 def run_migrations_offline() -> None:
@@ -32,9 +34,16 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
-        with context.begin_transaction():
-            context.run_migrations()
+        # Piu' istanze avviate insieme non devono eseguire le migrazioni in parallelo
+        connection.execute(text("SELECT pg_advisory_lock(:k)"), {"k": MIGRAZIONI_LOCK})
+        connection.commit()
+        try:
+            context.configure(connection=connection, target_metadata=target_metadata)
+            with context.begin_transaction():
+                context.run_migrations()
+        finally:
+            connection.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": MIGRAZIONI_LOCK})
+            connection.commit()
 
 
 if context.is_offline_mode():
