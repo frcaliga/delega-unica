@@ -1,0 +1,391 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:del="urn:www.agenziaentrate.gov.it:specificheTecniche:sfe:del:v1" targetNamespace="urn:www.agenziaentrate.gov.it:specificheTecniche:sfe:del:v1" elementFormDefault="qualified" attributeFormDefault="unqualified" version="1.0">
+	<xs:annotation>
+		<xs:documentation xml:lang="it"><![CDATA[
+		Versione 1.1 - 07/07/2026
+		]]></xs:documentation>
+	</xs:annotation>
+	<xs:element name="Deleghe">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="Intestazione" type="del:Intestazione"/>
+				<xs:element name="DatiDelega" type="del:Soggetto_Type">
+					<xs:annotation>
+						<xs:documentation>la sezione è obbligatoria</xs:documentation>
+					</xs:annotation>
+				</xs:element>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:simpleType name="DatoNU_Type">
+		<xs:annotation>
+			<xs:documentation>Tipo semplice che identifica numeri naturali positivi e negativi con al massimo 16 cifre.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="16"/>
+			<xs:pattern value="(\-[1-9]|[1-9])[0-9]*"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DatoCF_Type">
+		<xs:annotation>
+			<xs:documentation>Tipo semplice che identifica un codice fiscale provvisorio o alfanumerico rispettandone i vincoli di struttura.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[0-9]{11}|[A-Z]{6}[0-9LMNPQRSTUV]{2}[A-Z]{1}[0-9LMNPQRSTUV]{2}[A-Z]{1}[0-9LMNPQRSTUV]{3}[A-Z]{1}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DatoCB_Type">
+		<xs:annotation>
+			<xs:documentation>Tipo semplice che consente esclusivamente i valori 0 e 1.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:byte">
+			<xs:pattern value="[01]"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DatoDN_Type">
+		<xs:annotation>
+			<xs:documentation>Tipo semplice che identifica una data nel formato ggmmaaaa.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:length value="8"/>
+			<xs:pattern value="(((0[1-9]|[12][0-9]|3[01])(0[13578]|10|12)(\d{4}))|(([0][1-9]|[12][0-9]|30)(0[469]|11)(\d{4}))|((0[1-9]|1[0-9]|2[0-8])(02)(\d{4}))|((29)(02)([02468][048]00))|((29)(02)([13579][26]00))|((29)(02)([0-9][0-9][0][48]))|((29)(02)([0-9][0-9][2468][048]))|((29)(02)([0-9][0-9][13579][26])))"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DatoAN_Type">
+		<xs:annotation>
+			<xs:documentation>Tipo semplice costituito da caratteri alfanumerici maiuscoli e dai caratteri: punto, virgola, apice, trattino, spazio, barra semplice, °, ^, ampersand, parentesi aperta e chiusa, doppie virgolette, barra rovesciata, la barra dritta, il più, le maiuscole accentate e la Ü. Tali caratteri non sono ammessi come primo carattere tranne: i numeri da 0 a 9, i caratteri maiuscoli da A a Z, il meno e le doppie virgolette.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="([0-9A-Z\-]|&quot;){1}([0-9A-Z&amp;]|'|\-|\.|,|\s|/|°|\^|\(|\)|À|È|É|Ì|Ò|Ù|Ü|&quot;|\\|\||\+)*"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:complexType name="Intestazione">
+		<xs:sequence>
+			<xs:element name="CodiceFornitura" type="xs:string" fixed="DEL24">
+				<xs:annotation>
+					<xs:documentation>Il codice fornitura è DEL24</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="SpazioUtente" type="del:DatoAN_Type" minOccurs="0"/>
+			<xs:element name="IdentificativoProdSoftware" minOccurs="0">
+				<xs:simpleType>
+					<xs:restriction base="del:DatoAN_Type">
+						<xs:maxLength value="16"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="Soggetto_Type">
+		<xs:sequence>
+			<xs:element name="SoggettoDelegante">
+				<xs:annotation>
+					<xs:documentation>La sezione e' obbligatoria</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:sequence>
+						<xs:element name="CodiceFiscale" type="del:DatoCF_Type">
+							<xs:annotation>
+								<xs:documentation>Il codice fiscale deve essere formalmente corretto e registrato in Anagrafe tributaria
+La non registrazione comporta lo scarto della richiesta.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+						<xs:choice>
+							<xs:element name="PersoneFisiche">
+								<xs:complexType>
+									<xs:sequence>
+										<xs:element name="Cognome">
+											<xs:annotation>
+												<xs:documentation>Cognome</xs:documentation>
+											</xs:annotation>
+											<xs:simpleType>
+												<xs:restriction base="del:DatoAN_Type">
+													<xs:maxLength value="80"/>
+												</xs:restriction>
+											</xs:simpleType>
+										</xs:element>
+										<xs:element name="Nome">
+											<xs:annotation>
+												<xs:documentation>Nome</xs:documentation>
+											</xs:annotation>
+											<xs:simpleType>
+												<xs:restriction base="del:DatoAN_Type">
+													<xs:maxLength value="80"/>
+												</xs:restriction>
+											</xs:simpleType>
+										</xs:element>
+									</xs:sequence>
+								</xs:complexType>
+							</xs:element>
+							<xs:element name="SoggettiDiversiDaPF">
+								<xs:complexType>
+									<xs:sequence>
+										<xs:element name="Denominazione">
+											<xs:annotation>
+												<xs:documentation>Denominazione</xs:documentation>
+											</xs:annotation>
+											<xs:simpleType>
+												<xs:restriction base="del:DatoAN_Type">
+													<xs:maxLength value="150"/>
+												</xs:restriction>
+											</xs:simpleType>
+										</xs:element>
+									</xs:sequence>
+								</xs:complexType>
+							</xs:element>
+						</xs:choice>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="SoggettoDelegato">
+				<xs:annotation>
+					<xs:documentation>La sezione e' obbligatoria. Il soggetto delegato deve essere registrato in qualità di intermediario ex articolo 3, comma 3, del d.P.R. n. 322 del 1998 e deve aver confermato l’accettazione delle condizioni del servizio</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:sequence>
+						<xs:element name="CodiceFiscale" type="del:DatoCF_Type">
+							<xs:annotation>
+								<xs:documentation>Il codice fiscale deve essere formalmente corretto e registrato in Anagrafe tributaria
+La non registrazione comporta lo scarto della richiesta.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+						<xs:choice>
+							<xs:element name="PersoneFisiche">
+								<xs:complexType>
+									<xs:sequence>
+										<xs:element name="Cognome">
+											<xs:annotation>
+												<xs:documentation>Cognome</xs:documentation>
+											</xs:annotation>
+											<xs:simpleType>
+												<xs:restriction base="del:DatoAN_Type">
+													<xs:maxLength value="80"/>
+												</xs:restriction>
+											</xs:simpleType>
+										</xs:element>
+										<xs:element name="Nome">
+											<xs:annotation>
+												<xs:documentation>Nome</xs:documentation>
+											</xs:annotation>
+											<xs:simpleType>
+												<xs:restriction base="del:DatoAN_Type">
+													<xs:maxLength value="80"/>
+												</xs:restriction>
+											</xs:simpleType>
+										</xs:element>
+									</xs:sequence>
+								</xs:complexType>
+							</xs:element>
+							<xs:element name="SoggettiDiversiDaPF">
+								<xs:complexType>
+									<xs:sequence>
+										<xs:element name="Denominazione">
+											<xs:annotation>
+												<xs:documentation>Denominazione</xs:documentation>
+											</xs:annotation>
+											<xs:simpleType>
+												<xs:restriction base="del:DatoAN_Type">
+													<xs:maxLength value="150"/>
+												</xs:restriction>
+											</xs:simpleType>
+										</xs:element>
+									</xs:sequence>
+								</xs:complexType>
+							</xs:element>
+						</xs:choice>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="Sottoscrittore">
+				<xs:annotation>
+					<xs:documentation>La sezione e' obbligatoria. Il sottoscrittore è il soggetto che deve firmare la delega</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:sequence>
+						<xs:element name="CodiceFiscale" type="del:DatoCF_Type">
+							<xs:annotation>
+								<xs:documentation>Il codice fiscale deve essere formalmente corretto e registrato in Anagrafe tributaria
+La non registrazione comporta lo scarto della richiesta.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+						<xs:element name="Cognome">
+							<xs:annotation>
+								<xs:documentation>Cognome</xs:documentation>
+							</xs:annotation>
+							<xs:simpleType>
+								<xs:restriction base="del:DatoAN_Type">
+									<xs:maxLength value="80"/>
+								</xs:restriction>
+							</xs:simpleType>
+						</xs:element>
+						<xs:element name="Nome">
+							<xs:annotation>
+								<xs:documentation>Nome</xs:documentation>
+							</xs:annotation>
+							<xs:simpleType>
+								<xs:restriction base="del:DatoAN_Type">
+									<xs:maxLength value="80"/>
+								</xs:restriction>
+							</xs:simpleType>
+						</xs:element>
+						<xs:element name="Qualifica">
+							<xs:annotation>
+								<xs:documentation>Può assumere i seguenti valori:
+ - 1 Soggetto delegante
+ - 2 Tutore/curatore speciale/amministratore di sostegno/genitore
+ - 3 Erede
+ - 4 Rappresentante legale/negoziale
+ - 5 Curatore fallimentare di una ditta individuale
+ </xs:documentation>
+							</xs:annotation>
+							<xs:simpleType>
+								<xs:restriction base="del:DatoNU_Type">
+									<xs:maxLength value="1"/>
+								</xs:restriction>
+							</xs:simpleType>
+						</xs:element>
+						<xs:element name="DatiDocumento" minOccurs="0">
+							<xs:annotation>
+								<xs:documentation>La sezione e'  obbligatoria nel caso in cui la delega venga firmata con FEA realizzata utilizzando certificati digitali non qualificati. La comunicazione deve contenere anche gli estremi del documento di identità del delegante.
+ </xs:documentation>
+							</xs:annotation>
+							<xs:complexType>
+								<xs:sequence>
+									<xs:element name="TipoDocumento">
+										<xs:annotation>
+											<xs:documentation>Può assumere i seguenti valori:
+ - 1 Carta d'identità
+ - 2 Passaporto
+ - 3 Patente
+ - 4 Altro </xs:documentation>
+										</xs:annotation>
+										<xs:simpleType>
+											<xs:restriction base="del:DatoNU_Type">
+												<xs:maxLength value="1"/>
+											</xs:restriction>
+										</xs:simpleType>
+									</xs:element>
+									<xs:element name="RilasciatoDa">
+										<xs:annotation>
+											<xs:documentation>Ente che ha rilasciato il documento</xs:documentation>
+										</xs:annotation>
+										<xs:simpleType>
+											<xs:restriction base="del:DatoAN_Type">
+												<xs:maxLength value="100"/>
+											</xs:restriction>
+										</xs:simpleType>
+									</xs:element>
+									<xs:element name="NumeroDocumento">
+										<xs:annotation>
+											<xs:documentation>Numero del documento</xs:documentation>
+										</xs:annotation>
+										<xs:simpleType>
+											<xs:restriction base="del:DatoAN_Type">
+												<xs:maxLength value="30"/>
+											</xs:restriction>
+										</xs:simpleType>
+									</xs:element>
+									<xs:element name="DataScadenzaDocumento" type="del:DatoDN_Type">
+										<xs:annotation>
+											<xs:documentation>Data di scadenza del documento</xs:documentation>
+										</xs:annotation>
+									</xs:element>
+									<xs:element name="TipoAltroDocumento" minOccurs="0">
+										<xs:annotation>
+											<xs:documentation>Obbligatorio solo nel caso venga indicata l’opzione 4 del tipo documento</xs:documentation>
+										</xs:annotation>
+										<xs:simpleType>
+											<xs:restriction base="del:DatoAN_Type">
+												<xs:maxLength value="100"/>
+											</xs:restriction>
+										</xs:simpleType>
+									</xs:element>
+								</xs:sequence>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="Richiesta">
+				<!--<xs:simpleType>
+					<xs:restriction base="del:DatoNU_Type">
+						<xs:maxLength value="1"/>
+						<xs:enumeration value="1"/>
+						<xs:enumeration value="2"/>
+						<xs:enumeration value="3"/>
+					</xs:restriction>
+				</xs:simpleType>-->
+				<xs:complexType>
+					<xs:choice>
+						<xs:element name="InserimentoDelega">
+							<xs:complexType>
+								<xs:sequence>
+									<xs:element name="TipoRichiesta" type="xs:string" fixed="1"/>
+									<xs:element name="Servizi" maxOccurs="30">
+										<xs:complexType>
+											<xs:sequence>
+												<xs:element name="TipoServizio">
+													<xs:annotation>
+														<xs:documentation> 
+Può assumere i seguenti valori:
+- 01 consultazione del Cassetto fiscale delegato
+- 02 consultazione e acquisizione delle fatture elettroniche o dei loro duplicati informatici
+- 03 consultazione dei dati rilevanti ai fini IVA
+- 04 registrazione dell’indirizzo telematico
+- 05 fatturazione elettronica e conservazione delle fatture elettroniche
+- 06 accreditamento e censimento dispositivi
+- 07 acquisizione dei dati ISA e dei dati per la determinazione della proposta di concordato preventivo biennale
+- 08 utilizzo dei servizi online dell'area riservata dell'Agenzia delle entrate-Riscossione
+								</xs:documentation>
+													</xs:annotation>
+													<xs:simpleType>
+														<xs:restriction base="del:DatoNU_Type">
+															<xs:maxLength value="2"/>
+														</xs:restriction>
+													</xs:simpleType>
+												</xs:element>
+											</xs:sequence>
+										</xs:complexType>
+									</xs:element>
+								</xs:sequence>
+							</xs:complexType>
+						</xs:element>
+						<xs:element name="RevocaDelega">
+							<xs:complexType>
+								<xs:sequence>
+									<xs:element name="TipoRichiesta" type="xs:string" fixed="2"/>
+								</xs:sequence>
+							</xs:complexType>
+						</xs:element>
+						<xs:element name="RinnovoDelega">
+							<xs:complexType>
+								<xs:sequence>
+									<xs:element name="TipoRichiesta" type="xs:string" fixed="3"/>
+								</xs:sequence>
+							</xs:complexType>
+						</xs:element>
+					</xs:choice>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="Firma">
+				<xs:annotation>
+					<xs:documentation>La sezione e' obbligatoria</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:sequence>
+						<xs:element name="Data" type="del:DatoDN_Type">
+							<xs:annotation>
+								<xs:documentation>La delega scade il 31 dicembre del quarto anno successivo a quello di conferimento.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+						<xs:element name="Firma" type="del:DatoCB_Type">
+							<xs:annotation>
+								<xs:documentation>Firma del sottoscrittore</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+</xs:schema>
