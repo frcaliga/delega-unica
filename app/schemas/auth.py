@@ -61,6 +61,8 @@ class TenantOut(BaseModel):
     id: uuid.UUID
     name: str
     codice_fiscale: str
+    cognome: str | None
+    nome: str | None
 
 
 class AuditLogOut(BaseModel):

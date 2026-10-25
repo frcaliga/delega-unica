@@ -9,6 +9,18 @@ n. 321918 del 7 agosto 2025 (specifiche tecniche del file XML).
 
 ## Stato
 
+Fase 1, registro e file XML:
+
+- Anagrafica clienti (deleganti) con controllo formale del codice fiscale
+- Deleghe: conferimento, revoca e rinnovo, con le regole dell'Allegato 2 (date di firma, finestra di
+  rinnovo di 90 giorni, firme ammesse per titolari di P.IVA e societa', qualifica del sottoscrittore)
+- Stati: bozza, in firma, firmata, inviata, attiva/accettata/scartata, sostituita, revocata
+- Scadenza al 31 dicembre del quarto anno successivo; elenco delle deleghe in scadenza
+- File XML DEL24 della singola delega e della fornitura massiva, validati sugli XSD ufficiali
+  in `app/specifiche`
+- Registro cronologico per studio: numerazione progressiva, catena di hash, sola aggiunta,
+  verifica di integrita' ed export CSV
+
 Fase 0, fondamenta:
 
 - FastAPI + SQLAlchemy 2 + Alembic su PostgreSQL

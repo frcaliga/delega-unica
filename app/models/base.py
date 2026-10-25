@@ -1,7 +1,8 @@
+import enum
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Uuid
+from sqlalchemy import DateTime, Enum, ForeignKey, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -26,4 +27,16 @@ class TenantScopedMixin:
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tenants.id", ondelete="RESTRICT"), index=True
+    )
+
+
+def str_enum(enum_cls: type[enum.StrEnum], length: int) -> Enum:
+    """Enum salvato come stringa (senza tipo nativo PostgreSQL), con i valori e non i nomi."""
+    return Enum(
+        enum_cls,
+        native_enum=False,
+        create_constraint=False,
+        length=length,
+        values_callable=lambda e: [m.value for m in e],
+        validate_strings=True,
     )
