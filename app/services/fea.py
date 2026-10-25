@@ -70,6 +70,16 @@ def sha256(dati: bytes) -> str:
 @lru_cache
 def get_autorita() -> ca_fea.Autorita:
     s = get_settings()
+    if s.fea_ca_kms_key_id:
+        import boto3
+
+        pem = (
+            s.fea_ca_cert_pem.encode()
+            if s.fea_ca_cert_pem
+            else Path(s.fea_ca_cert_path).read_bytes()
+        )
+        client = boto3.client("kms", region_name=s.aws_region)
+        return ca_fea.carica_autorita_kms(pem, client, s.fea_ca_kms_key_id)
     return ca_fea.carica_autorita(
         Path(s.fea_ca_cert_path), Path(s.fea_ca_key_path), s.fea_ca_key_password
     )

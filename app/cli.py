@@ -43,18 +43,32 @@ def create_tenant(
 @cli.command()
 def crea_ca_fea(
     denominazione: str = typer.Option(..., help="Nome dello studio o del gestore del servizio"),
-    password: str = typer.Option(..., prompt=True, hide_input=True, confirmation_prompt=True),
+    kms_key_id: str | None = typer.Option(
+        None, help="Chiave AWS KMS (RSA_4096, SIGN_VERIFY): se indicata la chiave resta in KMS"
+    ),
 ) -> None:
     """Crea l'autorita' interna che emette i certificati monouso della FEA."""
     from pathlib import Path
+
+    from cryptography.hazmat.primitives import serialization
 
     from app.config import get_settings
     from app.services import ca_fea
 
     s = get_settings()
-    cert, chiave = Path(s.fea_ca_cert_path), Path(s.fea_ca_key_path)
+    cert = Path(s.fea_ca_cert_path)
+    if kms_key_id:
+        import boto3
+
+        client = boto3.client("kms", region_name=s.aws_region)
+        autorita = ca_fea.crea_autorita(denominazione, chiave=ca_fea.ChiaveKms(client, kms_key_id))
+        # Il certificato e' pubblico: va nella variabile FEA_CA_CERT_PEM del servizio
+        typer.echo(autorita.certificato.public_bytes(serialization.Encoding.PEM).decode())
+        return
+    chiave = Path(s.fea_ca_key_path)
     if cert.exists() or chiave.exists():
         raise typer.BadParameter(f"Esiste gia' un'autorita' in {cert} o {chiave}")
+    password = typer.prompt("Password della chiave", hide_input=True, confirmation_prompt=True)
     ca_fea.salva_autorita(ca_fea.crea_autorita(denominazione), cert, chiave, password)
     typer.echo(f"Autorita' FEA creata: {cert}")
 

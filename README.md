@@ -26,10 +26,16 @@ senza partita IVA che non hanno SPID, CIE o CNS:
 4. Evidenze: copia del documento, dichiarazione, sessioni OTP, certificato, IP e operatore. Il
    database rifiuta modifiche e cancellazioni (le adesioni si possono solo revocare).
 
-Configurazione: l'autorita' interna si crea con `uv run python -m app.cli crea-ca-fea` (percorsi in
-`FEA_CA_CERT_PATH` e `FEA_CA_KEY_PATH`; in produzione la chiave va in un HSM o KMS). L'invio degli
-SMS si sceglie con `SMS_PROVIDER`: per ora c'e' solo `console`, che scrive il codice nel log. Il
-testo delle condizioni del servizio (`app/services/fea.py`) va validato da un legale prima dell'uso.
+Configurazione: l'autorita' interna si crea con `uv run python -m app.cli crea-ca-fea`. In
+sviluppo la chiave e' un file cifrato (`FEA_CA_CERT_PATH`, `FEA_CA_KEY_PATH`); in produzione sta
+in AWS KMS (`--kms-key-id`, poi `FEA_CA_KMS_KEY_ID` e `FEA_CA_CERT_PEM`). L'invio degli SMS si
+sceglie con `SMS_PROVIDER`: `console` scrive il codice nel log, `sns` usa AWS SNS. Il testo delle
+condizioni del servizio (`app/services/fea.py`) va validato da un legale prima dell'uso.
+
+## Produzione
+
+Infrastruttura Terraform per AWS Milano e guida al primo deploy in
+[infra/aws/README.md](infra/aws/README.md).
 
 Fase 2, firme:
 
