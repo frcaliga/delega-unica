@@ -102,3 +102,33 @@ def login(client: TestClient) -> Callable[[User], dict[str, str]]:
         return {"Authorization": f"Bearer {body['access_token']}"}
 
     return _login
+
+
+@pytest.fixture(scope="session")
+def pki():
+    """Autorita' di test con i certificati del cliente (non qualificato e qualificato) e dello
+    studio (qualificato)."""
+    from datetime import UTC, datetime, timedelta
+
+    from cryptography import x509
+
+    from app.services import ca_fea
+    from tests.helpers import LAURA, MARIO
+
+    qc = x509.UnrecognizedExtension(
+        x509.ObjectIdentifier("1.3.6.1.5.5.7.1.3"), bytes.fromhex("300a3008060604008e460101")
+    )
+    # Validi da prima delle date simulate nei test, qualunque sia il giorno in cui girano
+    dal = datetime(2025, 1, 1, tzinfo=UTC)
+    durata = timedelta(days=3650)
+    autorita = ca_fea.crea_autorita("Test", dal=dal)
+    return {
+        "ca": autorita,
+        "mario_fea": ca_fea.emetti_certificato(autorita, MARIO, "Rossi", "Mario", durata, dal=dal),
+        "mario_qualificato": ca_fea.emetti_certificato(
+            autorita, MARIO, "Rossi", "Mario", durata, [qc], dal=dal
+        ),
+        "studio": ca_fea.emetti_certificato(
+            autorita, LAURA, "Bruni", "Laura", durata, [qc], dal=dal
+        ),
+    }

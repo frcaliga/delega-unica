@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, Text, Uuid
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, LargeBinary, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.domain.regole import ModalitaFirma, Qualifica, TipoDocumento, TipoRichiesta
@@ -59,6 +59,8 @@ class Delega(IdMixin, TimestampMixin, TenantScopedMixin, Base):
     data_conferimento: Mapped[date | None] = mapped_column(Date)
     data_scadenza: Mapped[date | None] = mapped_column(Date, index=True)
     esito_motivo: Mapped[str | None] = mapped_column(Text)
+    # Ultimo XML consegnato per la firma: il file firmato deve contenere esattamente questo
+    xml_generato: Mapped[bytes | None] = mapped_column(LargeBinary)
 
     created_by: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
     updated_at: Mapped[datetime] = mapped_column(
