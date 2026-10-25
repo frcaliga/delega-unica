@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     # prima di poter usare le API applicative.
     require_mfa: bool = True
     totp_issuer: str = "Delega Unica"
+    # Codice fiscale del produttore del software, riportato nel file XML se valorizzato
+    identificativo_prod_software: str | None = None
 
 
 @lru_cache

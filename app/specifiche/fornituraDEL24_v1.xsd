@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:cm="urn:www.agenziaentrate.gov.it:specificheTecniche:common:v2" xmlns:del="urn:www.agenziaentrate.gov.it:specificheTecniche:sco:del:v1" xmlns:tm="www.agenziaentrate.gov.it:specificheTecniche:telent:v1" xmlns:xmime="http://www.w3.org/2005/05/xmlmime" targetNamespace="urn:www.agenziaentrate.gov.it:specificheTecniche:sco:del:v1" elementFormDefault="qualified" attributeFormDefault="unqualified" version="1.0">
+	<xs:annotation>
+		<xs:documentation xml:lang="it"><![CDATA[
+		Versione 1.1 - 05/12/2025
+		]]></xs:documentation>
+	</xs:annotation>
+	<xs:import namespace="www.agenziaentrate.gov.it:specificheTecniche:telent:v1" schemaLocation="./common/telematico_v1.xsd"/>
+	<xs:element name="Fornitura" substitutionGroup="tm:Fornitura">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="Intestazione" type="del:Intestazione_Type"/>
+				<xs:element name="Documento" type="del:Documento_DEL_Type"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:simpleType name="Identificativo_Type">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[0-9]{4}[1-9]|[0-9]{3}[1-9][0-9]|[0-9]{2}[1-9][0-9]{2}|[0-9][1-9][0-9]{3}|[1-9][0-9]{4}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:complexType name="Documento_Type">
+		<xs:annotation>
+			<xs:documentation xml:lang="it">Documento trasmesso</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="identificativo" type="del:Identificativo_Type" use="required" fixed="00001"/>
+	</xs:complexType>
+	<xs:simpleType name="DatoTL_Type">
+		<xs:annotation>
+			<xs:documentation>Tipo semplice che identifica un elemento di tipo telefono</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[0-9]*"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DatoEM_Type">
+		<xs:annotation>
+			<xs:documentation>Tipo semplice che identifica un elemento di tipo email</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[a-zA-Z0-9._%\-'&quot;?^~=]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DatoNU_Type">
+		<xs:annotation>
+			<xs:documentation>Tipo semplice che identifica numeri naturali positivi e negativi con al massimo 16 cifre.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:maxLength value="16"/>
+			<xs:pattern value="(\-[1-9]|[1-9])[0-9]*"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DatoCF_Type">
+		<xs:annotation>
+			<xs:documentation>Tipo semplice che identifica un codice fiscale provvisorio o alfanumerico rispettandone i vincoli di struttura.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[0-9]{11}|[A-Z]{6}[0-9LMNPQRSTUV]{2}[A-Z]{1}[0-9LMNPQRSTUV]{2}[A-Z]{1}[0-9LMNPQRSTUV]{3}[A-Z]{1}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DatoCB_Type">
+		<xs:annotation>
+			<xs:documentation>Tipo semplice che consente esclusivamente i valori 0 e 1.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:byte">
+			<xs:pattern value="[01]"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DatoDN_Type">
+		<xs:annotation>
+			<xs:documentation>Tipo semplice che identifica una data nel formato ggmmaaaa.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:length value="8"/>
+			<xs:pattern value="(((0[1-9]|[12][0-9]|3[01])(0[13578]|10|12)(\d{4}))|(([0][1-9]|[12][0-9]|30)(0[469]|11)(\d{4}))|((0[1-9]|1[0-9]|2[0-8])(02)(\d{4}))|((29)(02)([02468][048]00))|((29)(02)([13579][26]00))|((29)(02)([0-9][0-9][0][48]))|((29)(02)([0-9][0-9][2468][048]))|((29)(02)([0-9][0-9][13579][26])))"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="Filename_Type">
+		<xs:annotation>
+			<xs:documentation>Tipo semplice costituito da caratteri alfanumerici minuscoli e maiuscoli e dai caratteri: underscore, punto, trattino, spazio, parentesi aperta e chiusa.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="([a-z0-9A-Z]){1}([a-z0-9A-Z_]|\-|\.|\s|\(|\))*"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="DatoAN_Type">
+		<xs:annotation>
+			<xs:documentation>Tipo semplice costituito da caratteri alfanumerici maiuscoli e dai caratteri: punto, virgola, apice, trattino, spazio, barra semplice, °, ^, ampersand, parentesi aperta e chiusa, doppie virgolette, barra rovesciata, la barra dritta, il più, le maiuscole accentate e la Ü. Tali caratteri non sono ammessi come primo carattere tranne: i numeri da 0 a 9, i caratteri maiuscoli da A a Z, il meno e le doppie virgolette.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="([0-9A-Z\-]|&quot;){1}([0-9A-Z&amp;]|'|\-|\.|,|\s|/|°|\^|\(|\)|À|È|É|Ì|Ò|Ù|Ü|&quot;|\\|\||\+)*"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:complexType name="Documento_DEL_Type">
+		<xs:complexContent>
+			<xs:extension base="del:Documento_Type">
+				<xs:sequence>
+					<xs:element name="Frontespizio">
+						<xs:complexType>
+							<xs:sequence>
+								<xs:element name="IdentificativoProdSoftware" minOccurs="0">
+									<xs:simpleType>
+										<xs:restriction base="del:DatoAN_Type">
+											<xs:maxLength value="16"/>
+										</xs:restriction>
+									</xs:simpleType>
+								</xs:element>
+								<xs:element name="DichiarazioneAssunzioneResponsabilita" type="del:DatoCB_Type">
+									<xs:annotation>
+										<xs:documentation>Dichiarazione di essere in
+possesso dei moduli di delega, di
+impegnarsi a conservarli per 10
+anni dalla data di sottoscrizione, e
+di corrispondenza dei dati
+comunicati con quelli riportati nei
+moduli di conferimento, di
+consapevolezza delle
+conseguenze penali derivanti da
+dichiarazioni mendaci</xs:documentation>
+									</xs:annotation>
+								</xs:element>
+								<xs:element name="Richiedente">
+									<xs:complexType>
+										<xs:sequence>
+											<xs:element name="CodiceFiscale" type="del:DatoCF_Type">
+												<xs:annotation>
+													<xs:documentation>Il codice fiscale deve essere formalmente corretto e registrato in Anagrafe tributaria.
+La non registrazione comporta lo scarto della richiesta.
+Nel caso di omocodia del codice fiscale risolta dall’Agenzia delle Entrate con l’attribuzione di un nuovo codice fiscale, l’indicazione nella richiesta del precedente codice fiscale (omocodice)  comporta,  in sede di accoglimento delle comunicazioni trasmesse in via telematica,  lo  scarto della stessa. Il codice fiscale del richiedente deve coincidere con il codice fiscale del soggetto delegato presente nella delega</xs:documentation>
+												</xs:annotation>
+											</xs:element>
+											<xs:choice>
+												<xs:element name="PersoneFisiche">
+													<xs:complexType>
+														<xs:sequence>
+															<xs:element name="Cognome">
+																<xs:simpleType>
+																	<xs:restriction base="del:DatoAN_Type">
+																		<xs:maxLength value="80"/>
+																	</xs:restriction>
+																</xs:simpleType>
+															</xs:element>
+															<xs:element name="Nome">
+																<xs:simpleType>
+																	<xs:restriction base="del:DatoAN_Type">
+																		<xs:maxLength value="80"/>
+																	</xs:restriction>
+																</xs:simpleType>
+															</xs:element>
+														</xs:sequence>
+													</xs:complexType>
+												</xs:element>
+												<xs:element name="SoggettiDiversiDaPF">
+													<xs:complexType>
+														<xs:sequence>
+															<xs:element name="Denominazione">
+																<xs:simpleType>
+																	<xs:restriction base="del:DatoAN_Type">
+																		<xs:maxLength value="150"/>
+																	</xs:restriction>
+																</xs:simpleType>
+															</xs:element>
+														</xs:sequence>
+													</xs:complexType>
+												</xs:element>
+											</xs:choice>
+											<xs:element name="Cellulare" type="del:DatoTL_Type" minOccurs="0"/>
+											<xs:element name="Email" type="del:DatoEM_Type" minOccurs="0"/>
+										</xs:sequence>
+									</xs:complexType>
+								</xs:element>
+								<xs:element name="NumeroDeleghe">
+									<xs:annotation>
+										<xs:documentation>Numero massimo di deleghe 300</xs:documentation>
+									</xs:annotation>
+									<xs:simpleType>
+										<xs:restriction base="del:DatoNU_Type">
+											<xs:maxLength value="3"/>
+										</xs:restriction>
+									</xs:simpleType>
+								</xs:element>
+							</xs:sequence>
+						</xs:complexType>
+					</xs:element>
+					<xs:element name="Deleghe">
+						<xs:annotation>
+							<xs:documentation>la sezione è obbligatoria</xs:documentation>
+						</xs:annotation>
+						<xs:complexType>
+							<xs:sequence>
+								<xs:element name="Delegante" type="del:Soggetto_Type" maxOccurs="300">
+									<xs:annotation>
+										<xs:documentation>la sezione è obbligatoria. Il numero di deleghe deve essere uguale al valore del campo NumeroDeleghe del Frontespizio</xs:documentation>
+									</xs:annotation>
+								</xs:element>
+							</xs:sequence>
+						</xs:complexType>
+					</xs:element>
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+	<xs:complexType name="Intestazione_Type">
+		<xs:sequence>
+			<xs:element name="TipoFornitore" type="xs:string" fixed="10">
+				<xs:annotation>
+					<xs:documentation>
+10 - Intermediari (soggetti incaricati della trasmissione telematica delle dichiarazioni, di cui all’articolo 3, comma 3, del decreto del Presidente della Repubblica n. 322 del 1998)
+ </xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="SpazioUtente" type="del:DatoAN_Type" minOccurs="0"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:simpleType name="FileType_Type">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="application/pkcs7-mime"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:complexType name="FileAttachment_Type">
+		<xs:sequence>
+			<xs:element name="FileType">
+				<xs:simpleType>
+					<xs:restriction base="del:FileType_Type">
+						<xs:enumeration value="application/pkcs7-mime"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+			<xs:element name="FileName">
+				<xs:simpleType>
+					<xs:restriction base="del:Filename_Type">
+						<xs:maxLength value="100"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+			<xs:element name="ImageData" type="xs:base64Binary" xmime:expectedContentTypes="application/octet-stream"/>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="Soggetto_Type">
+		<xs:sequence>
+			<xs:element name="ProgressivoDelega">
+				<xs:annotation>
+					<xs:documentation>Numero progressivo della delega, il contatore deve avere un ordine crescente</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="del:DatoNU_Type">
+						<xs:maxLength value="3"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+			<xs:element name="CodiceFiscaleDelegante" type="del:DatoCF_Type">
+				<xs:annotation>
+					<xs:documentation>"Il codice fiscale deve essere formalmente corretto e registrato in Anagrafe tributaria.
+La non registrazione comporta lo scarto della richiesta. Il codice fiscale del delegante deve coincidere con il codice fiscale del delegante presente nella delega</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="Allegato" type="del:FileAttachment_Type"/>
+		</xs:sequence>
+	</xs:complexType>
+</xs:schema>

@@ -36,7 +36,9 @@ def _migrated_db() -> None:
 def _clean_db() -> Iterator[None]:
     yield
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE audit_log, users, tenants CASCADE"))
+        conn.execute(
+            text("TRUNCATE registro_deleghe, deleghe, clienti, audit_log, users, tenants CASCADE")
+        )
 
 
 @pytest.fixture
