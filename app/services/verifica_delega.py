@@ -64,6 +64,8 @@ def controlla(delega: Delega, verifica: EsitoVerifica, adesso: datetime) -> Cont
         esito.errori.append("Ogni busta deve avere un solo firmatario")
         return esito
 
+    if delega.busta_cliente is not None and livelli[-1].busta != delega.busta_cliente:
+        esito.errori.append("La busta del cliente non e' quella firmata con la piattaforma")
     cliente = livelli[-1].firmatari[0]
     _controlla_firmatario(cliente, "del cliente", adesso, esito)
     if cliente.codice_fiscale is None:

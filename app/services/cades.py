@@ -131,6 +131,8 @@ class Livello:
     """Una busta CMS; le buste annidate compaiono in ordine dall'esterno verso l'interno."""
 
     firmatari: list[Firmatario]
+    # La busta DER di questo livello
+    busta: bytes = b""
 
 
 @dataclass
@@ -258,7 +260,7 @@ def verifica(busta: bytes, max_livelli: int = 3) -> EsitoVerifica:
         firmatari = [
             _verifica_signer(signed_data, si, contenuto) for si in signed_data["signer_infos"]
         ]
-        esito.livelli.append(Livello(firmatari))
+        esito.livelli.append(Livello(firmatari, dati))
         dati = contenuto
     esito.contenuto = dati
     return esito

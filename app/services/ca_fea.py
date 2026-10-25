@@ -7,9 +7,10 @@ usata una sola volta e poi scartata: cosi' il firmatario ne mantiene il controll
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
@@ -113,3 +114,29 @@ def emetti_certificato(
     for estensione in estensioni or []:
         builder = builder.add_extension(estensione, critical=False)
     return chiave, builder.sign(autorita.chiave, hashes.SHA256())
+
+
+def salva_autorita(autorita: Autorita, percorso_cert: Path, percorso_chiave: Path, password: str):
+    """Scrive certificato (PEM) e chiave privata (PKCS#8 cifrata) dell'autorita'."""
+    percorso_cert.parent.mkdir(parents=True, exist_ok=True)
+    percorso_chiave.parent.mkdir(parents=True, exist_ok=True)
+    percorso_cert.write_bytes(autorita.certificato.public_bytes(serialization.Encoding.PEM))
+    chiave = autorita.chiave.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.BestAvailableEncryption(password.encode()),
+    )
+    percorso_chiave.touch(mode=0o600)
+    percorso_chiave.write_bytes(chiave)
+
+
+def carica_autorita(percorso_cert: Path, percorso_chiave: Path, password: str | None) -> Autorita:
+    certificato = x509.load_pem_x509_certificate(percorso_cert.read_bytes())
+    chiave = serialization.load_pem_private_key(
+        percorso_chiave.read_bytes(), password.encode() if password else None
+    )
+    if not isinstance(chiave, rsa.RSAPrivateKey):
+        raise ValueError("La chiave dell'autorita' FEA deve essere RSA")
+    if chiave.public_key().public_numbers() != certificato.public_key().public_numbers():
+        raise ValueError("La chiave non corrisponde al certificato dell'autorita' FEA")
+    return Autorita(chiave, certificato)

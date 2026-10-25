@@ -61,6 +61,8 @@ class Delega(IdMixin, TimestampMixin, TenantScopedMixin, Base):
     esito_motivo: Mapped[str | None] = mapped_column(Text)
     # Ultimo XML consegnato per la firma: il file firmato deve contenere esattamente questo
     xml_generato: Mapped[bytes | None] = mapped_column(LargeBinary)
+    # FEA con la piattaforma: busta firmata dal cliente, da controfirmare a cura dello studio
+    busta_cliente: Mapped[bytes | None] = mapped_column(LargeBinary)
 
     created_by: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
     updated_at: Mapped[datetime] = mapped_column(
