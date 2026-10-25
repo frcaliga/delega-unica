@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.config import get_settings
-from app.routers import auth, clienti, deleghe, registro, tenant, users
+from app.routers import auth, clienti, deleghe, forniture, registro, tenant, users
 
 
 def create_app() -> FastAPI:
@@ -12,6 +12,7 @@ def create_app() -> FastAPI:
     app.include_router(clienti.router)
     app.include_router(deleghe.router)
     app.include_router(registro.router)
+    app.include_router(forniture.router)
 
     @app.get("/health", tags=["health"])
     def health() -> dict[str, str]:

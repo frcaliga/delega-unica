@@ -1,7 +1,8 @@
+import hashlib
 import uuid
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,10 +12,10 @@ from app.db import get_db
 from app.deps import get_current_user
 from app.domain import regole
 from app.domain.regole import ModalitaFirma, Qualifica, TipoRichiesta
-from app.models import Delega, StatoDelega, Tenant, User
+from app.models import Delega, DocumentoFirmato, StatoDelega, Tenant, User
 from app.routers.clienti import get_cliente
-from app.schemas.deleghe import DelegaIn, DelegaOut, EsitoIn, VoceRegistroOut
-from app.services import registro
+from app.schemas.deleghe import DelegaIn, DelegaOut, EsitoCaricamentoOut, EsitoIn
+from app.services import cades, registro, verifica_delega
 from app.services.xml_delega import XmlNonValido, costruisci_delega
 
 router = APIRouter(prefix="/deleghe", tags=["deleghe"])
@@ -208,6 +209,7 @@ def download_xml(
     except XmlNonValido as exc:
         raise _errori(exc.errori) from exc
 
+    delega.xml_generato = contenuto
     if delega.stato == StatoDelega.BOZZA:
         delega.stato = StatoDelega.IN_FIRMA
     audit.record(
@@ -227,25 +229,63 @@ def download_xml(
     )
 
 
-@router.post("/{delega_id}/registra", response_model=VoceRegistroOut)
-def registra_delega(
+MAX_DIMENSIONE_P7M = 5 * 1024 * 1024
+
+
+@router.post("/{delega_id}/firmato", response_model=EsitoCaricamentoOut)
+async def carica_firmato(
     delega_id: uuid.UUID,
     request: Request,
+    file: UploadFile,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
-    """Annota nel registro cronologico la delega ricevuta firmata dal cliente."""
+) -> EsitoCaricamentoOut:
+    """Carica il .p7m firmato, lo verifica e annota la delega nel registro cronologico."""
     delega = _get_delega(db, user, delega_id)
-    _richiedi_stato(delega, StatoDelega.BOZZA, StatoDelega.IN_FIRMA)
+    _richiedi_stato(delega, StatoDelega.IN_FIRMA)
+    busta = await file.read(MAX_DIMENSIONE_P7M + 1)
+    if len(busta) > MAX_DIMENSIONE_P7M:
+        raise _errori(["Il file supera i 5 MB"])
     if not delega.ha_documento:
         raise _errori(
             ["Il registro richiede gli estremi del documento d'identita' del sottoscrittore"]
         )
+    try:
+        esito_cades = cades.verifica(busta)
+    except cades.BustaNonValida as exc:
+        raise _errori([str(exc)]) from exc
+    controllo = verifica_delega.controlla(delega, esito_cades, clock.adesso())
+    if controllo.errori:
+        audit.record(
+            db,
+            "delega_firma_rifiutata",
+            user=user,
+            entity_type="delega",
+            entity_id=delega.id,
+            request=request,
+            details={"errori": controllo.errori},
+        )
+        db.commit()
+        raise _errori(controllo.errori)
+
+    firmatari = verifica_delega.riepilogo(esito_cades)
+    nome = f"DEL24_{delega.cliente.codice_fiscale}_{str(delega.id)[:8]}.xml.p7m"
+    db.add(
+        DocumentoFirmato(
+            tenant_id=delega.tenant_id,
+            delega_id=delega.id,
+            nome_file=nome,
+            contenuto=busta,
+            sha256=hashlib.sha256(busta).hexdigest(),
+            firmatari=firmatari,
+            user_id=user.id,
+        )
+    )
     voce = registro.annota(db, delega, user, clock.oggi())
     delega.stato = StatoDelega.FIRMATA
     audit.record(
         db,
-        "delega_registrata",
+        "delega_firmata",
         user=user,
         entity_type="delega",
         entity_id=delega.id,
@@ -253,7 +293,27 @@ def registra_delega(
         details={"numero_registro": voce.numero},
     )
     db.commit()
-    return voce
+    return EsitoCaricamentoOut(
+        numero_registro=voce.numero, firmatari=firmatari, avvisi=controllo.avvisi
+    )
+
+
+@router.get("/{delega_id}/firmato", response_class=Response)
+def scarica_firmato(
+    delega_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Il .p7m da trasmettere con l'invio puntuale dall'area riservata dell'AdE."""
+    delega = _get_delega(db, user, delega_id)
+    doc = db.scalar(select(DocumentoFirmato).where(DocumentoFirmato.delega_id == delega.id))
+    if doc is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Nessun file firmato")
+    return Response(
+        doc.contenuto,
+        media_type="application/pkcs7-mime",
+        headers={"Content-Disposition": f'attachment; filename="{doc.nome_file}"'},
+    )
 
 
 @router.post("/{delega_id}/invio", response_model=DelegaOut)

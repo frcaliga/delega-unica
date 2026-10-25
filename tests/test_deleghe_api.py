@@ -1,11 +1,13 @@
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 from lxml import etree
 from sqlalchemy import text
 
 from app import clock
+from app.clock import ROMA
 from app.models import Role
+from app.services import cades
 from tests.helpers import LAURA, MARIO, SOCIETA, STUDIO
 
 OGGI = date(2026, 10, 25)
@@ -17,9 +19,40 @@ DOCUMENTO = {
 }
 
 
+def _imposta_data(monkeypatch, giorno: date) -> None:
+    monkeypatch.setattr(clock, "oggi", lambda: giorno)
+    monkeypatch.setattr(
+        clock, "adesso", lambda: datetime(giorno.year, giorno.month, giorno.day, 18, tzinfo=ROMA)
+    )
+
+
 @pytest.fixture(autouse=True)
 def _oggi(monkeypatch):
-    monkeypatch.setattr(clock, "oggi", lambda: OGGI)
+    _imposta_data(monkeypatch, OGGI)
+
+
+def firma_fea(pki, xml: bytes, giorno: date = OGGI) -> bytes:
+    """Busta del cliente con FEA non qualificata, controfirmata dallo studio."""
+    ora_cliente = datetime(giorno.year, giorno.month, giorno.day, 10, tzinfo=ROMA)
+    ora_studio = datetime(giorno.year, giorno.month, giorno.day, 11, tzinfo=ROMA)
+    interna = cades.firma(xml, *pki["mario_fea"], ora=ora_cliente)
+    return cades.firma(interna, *pki["studio"], ora=ora_studio)
+
+
+def carica(client, headers, delega_id, busta):
+    return client.post(
+        f"/deleghe/{delega_id}/firmato",
+        headers=headers,
+        files={"file": ("delega.xml.p7m", busta, "application/pkcs7-mime")},
+    )
+
+
+def firma_e_carica(client, headers, pki, delega_id, giorno: date = OGGI):
+    xml = client.get(f"/deleghe/{delega_id}/xml", headers=headers)
+    assert xml.status_code == 200, xml.text
+    res = carica(client, headers, delega_id, firma_fea(pki, xml.content, giorno))
+    assert res.status_code == 200, res.text
+    return res.json()
 
 
 @pytest.fixture
@@ -51,9 +84,8 @@ def _conferimento(cliente_id, **kw):
     return body
 
 
-def _ciclo_completo(client, headers, delega_id, data_esito="2026-10-25"):
-    assert client.get(f"/deleghe/{delega_id}/xml", headers=headers).status_code == 200
-    assert client.post(f"/deleghe/{delega_id}/registra", headers=headers).status_code == 200
+def _ciclo_completo(client, headers, pki, delega_id, data_esito="2026-10-25"):
+    firma_e_carica(client, headers, pki, delega_id, date.fromisoformat(data_esito))
     assert client.post(f"/deleghe/{delega_id}/invio", headers=headers).status_code == 200
     res = client.post(
         f"/deleghe/{delega_id}/esito",
@@ -82,7 +114,7 @@ def test_cliente_duplicato(client, headers, mario):
     assert res.status_code == 409
 
 
-def test_ciclo_di_vita_conferimento(client, headers, mario):
+def test_ciclo_di_vita_conferimento(client, headers, mario, pki):
     res = client.post("/deleghe", headers=headers, json=_conferimento(mario["id"]))
     assert res.status_code == 201, res.text
     delega = res.json()
@@ -95,9 +127,14 @@ def test_ciclo_di_vita_conferimento(client, headers, mario):
     root = etree.fromstring(xml.content)
     assert root.tag.endswith("Deleghe")
 
-    voce = client.post(f"/deleghe/{delega['id']}/registra", headers=headers).json()
-    assert voce["numero"] == 1
+    esito = carica(client, headers, delega["id"], firma_fea(pki, xml.content)).json()
+    assert esito["numero_registro"] == 1
+    assert [liv["firmatari"][0]["codice_fiscale"] for liv in esito["firmatari"]] == [LAURA, MARIO]
+    voce = client.get("/registro", headers=headers).json()[0]
     assert voce["documento_estremi"].startswith("Carta d'identita' n. CA12345AB")
+
+    p7m = client.get(f"/deleghe/{delega['id']}/firmato", headers=headers)
+    assert p7m.headers["content-type"] == "application/pkcs7-mime"
 
     client.post(f"/deleghe/{delega['id']}/invio", headers=headers)
     attiva = client.post(
@@ -137,19 +174,19 @@ def test_partita_iva_attiva_solo_firma_digitale_o_cie(client, headers):
     assert client.post("/deleghe", headers=headers, json=body).status_code == 201
 
 
-def test_nuovo_conferimento_sostituisce_il_precedente(client, headers, mario):
+def test_nuovo_conferimento_sostituisce_il_precedente(client, headers, mario, pki):
     prima = client.post("/deleghe", headers=headers, json=_conferimento(mario["id"])).json()
-    _ciclo_completo(client, headers, prima["id"])
+    _ciclo_completo(client, headers, pki, prima["id"])
     seconda = client.post(
         "/deleghe", headers=headers, json=_conferimento(mario["id"], servizi=["08"])
     ).json()
-    _ciclo_completo(client, headers, seconda["id"])
+    _ciclo_completo(client, headers, pki, seconda["id"])
     assert client.get(f"/deleghe/{prima['id']}", headers=headers).json()["stato"] == "sostituita"
 
 
-def test_revoca(client, headers, mario):
+def test_revoca(client, headers, mario, pki):
     delega = client.post("/deleghe", headers=headers, json=_conferimento(mario["id"])).json()
-    _ciclo_completo(client, headers, delega["id"])
+    _ciclo_completo(client, headers, pki, delega["id"])
     revoca = client.post(
         "/deleghe",
         headers=headers,
@@ -158,14 +195,14 @@ def test_revoca(client, headers, mario):
         ),
     )
     assert revoca.status_code == 201, revoca.text
-    esito = _ciclo_completo(client, headers, revoca.json()["id"])
+    esito = _ciclo_completo(client, headers, pki, revoca.json()["id"])
     assert esito["stato"] == "accettata"
     assert client.get(f"/deleghe/{delega['id']}", headers=headers).json()["stato"] == "revocata"
 
 
-def test_rinnovo_solo_negli_ultimi_90_giorni(client, headers, mario, monkeypatch):
+def test_rinnovo_solo_negli_ultimi_90_giorni(client, headers, mario, pki, monkeypatch):
     delega = client.post("/deleghe", headers=headers, json=_conferimento(mario["id"])).json()
-    _ciclo_completo(client, headers, delega["id"])
+    _ciclo_completo(client, headers, pki, delega["id"])
     rinnovo = _conferimento(
         mario["id"], tipo_richiesta="3", servizi=[], delega_origine_id=delega["id"]
     )
@@ -173,12 +210,12 @@ def test_rinnovo_solo_negli_ultimi_90_giorni(client, headers, mario, monkeypatch
     assert res.status_code == 422
     assert "rinnovo" in res.json()["detail"]["errori"][0]
 
-    monkeypatch.setattr(clock, "oggi", lambda: date(2030, 11, 15))
+    _imposta_data(monkeypatch, date(2030, 11, 15))
     rinnovo["data_firma"] = "2030-11-14"
     res = client.post("/deleghe", headers=headers, json=rinnovo)
     assert res.status_code == 201, res.text
     assert res.json()["servizi"] == ["01", "02"]
-    esito = _ciclo_completo(client, headers, res.json()["id"], data_esito="2030-11-15")
+    esito = _ciclo_completo(client, headers, pki, res.json()["id"], data_esito="2030-11-15")
     assert esito["data_scadenza"] == "2035-12-31"
 
     scadenze = client.get("/deleghe/in-scadenza", headers=headers).json()
@@ -195,10 +232,9 @@ def test_stati_non_ammessi(client, headers, mario):
     assert res.status_code == 409
 
 
-def test_scarto(client, headers, mario):
+def test_scarto(client, headers, mario, pki):
     delega = client.post("/deleghe", headers=headers, json=_conferimento(mario["id"])).json()
-    client.get(f"/deleghe/{delega['id']}/xml", headers=headers)
-    client.post(f"/deleghe/{delega['id']}/registra", headers=headers)
+    firma_e_carica(client, headers, pki, delega["id"])
     client.post(f"/deleghe/{delega['id']}/invio", headers=headers)
     senza_motivo = client.post(
         f"/deleghe/{delega['id']}/esito",
@@ -214,10 +250,10 @@ def test_scarto(client, headers, mario):
     assert res.json()["stato"] == "scartata"
 
 
-def test_registro_numerazione_hash_ed_export(client, headers, mario, db):
+def test_registro_numerazione_hash_ed_export(client, headers, mario, db, pki):
     for _ in range(3):
         d = client.post("/deleghe", headers=headers, json=_conferimento(mario["id"])).json()
-        client.post(f"/deleghe/{d['id']}/registra", headers=headers)
+        firma_e_carica(client, headers, pki, d["id"])
     voci = client.get("/registro", headers=headers).json()
     assert [v["numero"] for v in voci] == [1, 2, 3]
     assert client.get("/registro/verifica", headers=headers).json()["integro"] is True
@@ -238,9 +274,9 @@ def test_registro_numerazione_hash_ed_export(client, headers, mario, db):
     assert "numero 2" in esito["primo_errore"]
 
 
-def test_registro_rifiuta_modifiche(make_user, db, client, headers, mario):
+def test_registro_rifiuta_modifiche(make_user, db, client, headers, mario, pki):
     d = client.post("/deleghe", headers=headers, json=_conferimento(mario["id"])).json()
-    client.post(f"/deleghe/{d['id']}/registra", headers=headers)
+    firma_e_carica(client, headers, pki, d["id"])
     with pytest.raises(Exception, match="sola aggiunta"):
         db.execute(text("DELETE FROM registro_deleghe"))
     db.rollback()

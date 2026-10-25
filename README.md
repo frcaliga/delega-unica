@@ -9,6 +9,20 @@ n. 321918 del 7 agosto 2025 (specifiche tecniche del file XML).
 
 ## Stato
 
+Fase 2, firme:
+
+- Caricamento del file `.p7m` firmato (`POST /deleghe/{id}/firmato`) con verifica CAdES:
+  integrita' del contenuto e della firma, certificato valido, codice fiscale del firmatario uguale
+  a quello del sottoscrittore, date di firma ammesse, contenuto identico all'XML generato
+- Firma digitale: il certificato deve essere qualificato (QcCompliance)
+- FEA con certificato non qualificato: busta annidata con la firma del cliente all'interno e la
+  firma qualificata dello studio all'esterno, apposta dopo quella del cliente
+- La delega diventa "firmata" solo dopo la verifica, e solo allora entra nel registro;
+  i rifiuti finiscono nell'audit log
+- Motore di firma CAdES-B (`app/services/cades.py`) e CA interna per i certificati FEA
+  (`app/services/ca_fea.py`), base per la FEA erogata dalla piattaforma
+- Fornitura massiva (`POST /forniture`, fino a 300 deleghe) generata dai file firmati
+
 Fase 1, registro e file XML:
 
 - Anagrafica clienti (deleganti) con controllo formale del codice fiscale

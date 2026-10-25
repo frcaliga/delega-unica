@@ -152,3 +152,15 @@ class TenantUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     cognome: str | None = Field(None, max_length=80)
     nome: str | None = Field(None, max_length=80)
+
+
+class EsitoCaricamentoOut(BaseModel):
+    numero_registro: int
+    firmatari: list[dict]
+    avvisi: list[str]
+
+
+class FornituraIn(BaseModel):
+    delega_ids: list[uuid.UUID] = Field(min_length=1, max_length=300)
+    email: EmailStr | None = None
+    cellulare: str | None = Field(None, pattern=r"^[0-9]{6,12}$")
