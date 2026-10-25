@@ -41,6 +41,25 @@ def create_tenant(
 
 
 @cli.command()
+def crea_ca_fea(
+    denominazione: str = typer.Option(..., help="Nome dello studio o del gestore del servizio"),
+    password: str = typer.Option(..., prompt=True, hide_input=True, confirmation_prompt=True),
+) -> None:
+    """Crea l'autorita' interna che emette i certificati monouso della FEA."""
+    from pathlib import Path
+
+    from app.config import get_settings
+    from app.services import ca_fea
+
+    s = get_settings()
+    cert, chiave = Path(s.fea_ca_cert_path), Path(s.fea_ca_key_path)
+    if cert.exists() or chiave.exists():
+        raise typer.BadParameter(f"Esiste gia' un'autorita' in {cert} o {chiave}")
+    ca_fea.salva_autorita(ca_fea.crea_autorita(denominazione), cert, chiave, password)
+    typer.echo(f"Autorita' FEA creata: {cert}")
+
+
+@cli.command()
 def version() -> None:
     typer.echo("delega-unica 0.1.0")
 

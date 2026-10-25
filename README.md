@@ -9,6 +9,28 @@ n. 321918 del 7 agosto 2025 (specifiche tecniche del file XML).
 
 ## Stato
 
+Fase 3, FEA allo sportello dello studio (DPCM 22/2/2013, artt. 55-57). Per le persone fisiche
+senza partita IVA che non hanno SPID, CIE o CNS:
+
+1. Adesione: l'operatore identifica il cliente di persona, registra il documento esibito con la
+   sua copia e il cellulare (`POST /clienti/{id}/adesioni-fea`). La piattaforma genera la
+   dichiarazione di accettazione e il cliente la conferma con l'OTP ricevuto via SMS
+   (`POST /adesioni-fea/{id}/conferma`).
+2. Firma: con l'XML della delega davanti, il cliente riceve un OTP (`POST /deleghe/{id}/fea/otp`)
+   legato all'impronta di quell'XML e lo inserisce (`POST /deleghe/{id}/fea/firma`). La piattaforma
+   emette un certificato monouso con SERIALNUMBER=TINIT-codice fiscale, firma l'XML in CAdES e
+   scarta la chiave.
+3. Controfirma: lo studio scarica la busta del cliente (`GET /deleghe/{id}/fea/busta-cliente`), la
+   firma con la propria firma digitale e la carica con `POST /deleghe/{id}/firmato`. Il caricamento
+   accetta solo la busta prodotta dalla piattaforma.
+4. Evidenze: copia del documento, dichiarazione, sessioni OTP, certificato, IP e operatore. Il
+   database rifiuta modifiche e cancellazioni (le adesioni si possono solo revocare).
+
+Configurazione: l'autorita' interna si crea con `uv run python -m app.cli crea-ca-fea` (percorsi in
+`FEA_CA_CERT_PATH` e `FEA_CA_KEY_PATH`; in produzione la chiave va in un HSM o KMS). L'invio degli
+SMS si sceglie con `SMS_PROVIDER`: per ora c'e' solo `console`, che scrive il codice nel log. Il
+testo delle condizioni del servizio (`app/services/fea.py`) va validato da un legale prima dell'uso.
+
 Fase 2, firme:
 
 - Caricamento del file `.p7m` firmato (`POST /deleghe/{id}/firmato`) con verifica CAdES:
