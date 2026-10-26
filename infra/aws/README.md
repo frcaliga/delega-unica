@@ -50,6 +50,17 @@ certificato dell'autorita'.
 
 ### 3. Immagine dell'applicazione
 
+Il modo consigliato e' farla costruire a GitHub, che la carica su ECR con credenziali temporanee
+(OIDC): sul PC non serve Docker.
+
+1. Dopo l'apply, copiare `terraform output -raw ruolo_github_immagine`.
+2. Su GitHub, nel repository: *Settings > Secrets and variables > Actions > Variables >
+   New repository variable*, nome `AWS_ROLE_ARN`, valore l'ARN del punto 1.
+3. *Actions > Immagine > Run workflow* sul ramo `main`, indicando il tag (per esempio
+   `2026-10-25-1`). In pochi minuti l'immagine e' su ECR.
+
+In alternativa, da un PC con Docker:
+
 ```bash
 REPO=$(terraform output -raw repository_immagine)
 TAG=2026-10-25-1
