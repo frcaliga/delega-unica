@@ -10,6 +10,8 @@ resource "aws_db_parameter_group" "database" {
   parameter {
     name  = "rds.force_ssl"
     value = "1"
+    # Come lo registra RDS: con "immediate" ogni plan proporrebbe una modifica inutile
+    apply_method = "pending-reboot"
   }
 }
 

@@ -14,3 +14,8 @@ output "chiave_ca_fea" {
 output "segreto_certificato_ca_fea" {
   value = aws_secretsmanager_secret.ca_fea_certificato.name
 }
+
+output "ruolo_github_immagine" {
+  description = "Da impostare nella variabile AWS_ROLE_ARN delle GitHub Actions"
+  value       = aws_iam_role.github_immagine.arn
+}

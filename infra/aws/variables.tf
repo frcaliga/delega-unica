@@ -47,3 +47,9 @@ variable "sms_mittente" {
   type        = string
   default     = "DelegaUnica"
 }
+
+variable "repository_github" {
+  description = "Repository GitHub autorizzato a caricare le immagini (proprietario/nome)"
+  type        = string
+  default     = "frcaliga/delega-unica"
+}

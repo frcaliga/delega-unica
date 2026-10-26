@@ -1,0 +1,38 @@
+name: Immagine
+
+# Avvio manuale da GitHub: Actions > Immagine > Run workflow, indicando il tag del rilascio.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag dell'immagine, per esempio 2026-10-26-1"
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Controllo del tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          [[ "$TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo "Tag non valido: $TAG"; exit 1; }
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: eu-south-1
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build e caricamento
+        env:
+          IMMAGINE: ${{ steps.ecr.outputs.registry }}/delega-unica:${{ inputs.tag }}
+        run: |
+          docker build --platform linux/amd64 -t "$IMMAGINE" .
+          docker push "$IMMAGINE"
+          echo "Immagine caricata: $IMMAGINE" >> "$GITHUB_STEP_SUMMARY"
