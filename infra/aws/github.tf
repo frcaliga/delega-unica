@@ -1,5 +1,7 @@
 # GitHub Actions costruisce l'immagine e la carica su ECR senza chiavi di accesso salvate:
 # il workflow ottiene credenziali temporanee tramite OIDC, solo dal ramo main di questo repository.
+# Dal 15 luglio 2026 i repository nuovi presentano il soggetto con gli identificativi numerici
+# (repo:proprietario@id/nome@id), che non cambiano se il nome viene riusato da altri.
 
 resource "aws_iam_openid_connect_provider" "github" {
   url             = "https://token.actions.githubusercontent.com"
@@ -25,7 +27,7 @@ data "aws_iam_policy_document" "assume_github" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.repository_github}:ref:refs/heads/main"]
+      values   = [for soggetto in var.soggetti_github : "${soggetto}:ref:refs/heads/main"]
     }
   }
 }
