@@ -387,7 +387,7 @@ def test_comando_elimina_documenti_scaduti(client, headers, mario, db, monkeypat
 
     from app.cli import cli
 
-    monkeypatch.setattr(lettura_documenti, "leggi", lambda *a: lettura_documenti.Lettura())
+    monkeypatch.setattr(lettura_documenti, "leggi", lambda *a, **k: lettura_documenti.Lettura())
     for scadenza in ("2024-01-01", "2026-01-01"):
         res = client.post(
             f"/clienti/{mario['id']}/documenti-identita",
