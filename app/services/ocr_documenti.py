@@ -229,8 +229,32 @@ def ocr_words(img: np.ndarray, scale: float, variant: str, psm: int = 11) -> tup
     return words, "\n".join(" ".join(v) for v in lines.values())
 
 
+def _cpu_disponibili() -> int:
+    """CPU davvero utilizzabili: os.cpu_count() conta quelle della macchina, non il limite del
+    container (quota cgroup, come su Fargate) ne' quello di taskset."""
+    try:
+        n = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        n = os.cpu_count() or 1
+    for quota_periodo in (
+        lambda: Path("/sys/fs/cgroup/cpu.max").read_text().split()[:2],  # cgroup v2
+        lambda: [
+            Path(f"/sys/fs/cgroup/cpu/cpu.cfs_{x}_us").read_text().strip()  # cgroup v1
+            for x in ("quota", "period")
+        ],
+    ):
+        try:
+            quota, periodo = quota_periodo()
+            if quota not in ("max", "-1"):
+                n = min(n, max(1, round(int(quota) / int(periodo))))
+            break
+        except (OSError, ValueError):
+            continue
+    return max(1, n)
+
+
 # Tesseract gira in processi separati: le varianti di una pagina si leggono in parallelo
-OCR_PARALLELO = max(1, min(4, os.cpu_count() or 1))
+OCR_PARALLELO = max(1, min(4, int(os.environ.get("OCR_PARALLELO") or _cpu_disponibili())))
 
 # Tempo massimo della lettura: scaduto, le letture mirate successive restituiscono testo vuoto e
 # l'estrazione si chiude con quello che ha gia' trovato. {"fine": monotonic, "scaduto": bool}
@@ -304,19 +328,34 @@ def _in_parallelo(lavori: list[tuple[np.ndarray, str]]) -> list[str]:
 def ocr_region(
     rgb: np.ndarray, box, thresholds=(60, 80, 100, 120), scales=(2.0, 3.0), psm: int = 7
 ) -> list[str]:
-    """OCR di una singola riga isolando il testo nero (utile sopra ologrammi/sfondi)."""
+    """OCR di una singola riga isolando il testo nero (utile sopra ologrammi/sfondi).
+
+    Le scale si provano una alla volta: se alla prima quasi tutte le soglie danno lo stesso
+    testo, le altre non cambierebbero il voto e si risparmiano."""
     crop = _clip(rgb, box)
     if crop.size == 0:
         return []
     mx = crop.max(axis=2).astype(np.uint8)
-    lavori = []
-    for k in scales:
+    letti: list[str] = []
+    for i, k in enumerate(scales):
         g = cv2.resize(mx, None, fx=k, fy=k, interpolation=cv2.INTER_CUBIC)
+        lavori = []
         for t in thresholds:
             b = cv2.medianBlur(np.where(g < t, 0, 255).astype(np.uint8), 3)
             b = cv2.copyMakeBorder(b, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
             lavori.append((b, f"--psm {psm}"))
-    return [t.strip() for t in _in_parallelo(lavori)]
+        letti += [t.strip() for t in _in_parallelo(lavori)]
+        if i + 1 < len(scales) and _concordi(letti, len(thresholds)):
+            break
+    return letti
+
+
+def _concordi(letti: list[str], n: int) -> bool:
+    """Almeno n-1 letture su n identiche e non vuote (con n >= 3)."""
+    piene = [t for t in letti if t]
+    if n < 3 or not piene:
+        return False
+    return Counter(piene).most_common(1)[0][1] >= n - 1
 
 
 def label_boxes(page: PageOCR, keyword: str, thr: float = 0.8) -> list[Word]:
@@ -811,9 +850,14 @@ def extract_cie(pages: list[PageOCR], comuni: dict | None = None) -> dict:
                     )
                     if v:
                         cands.append(v)
-        cands += [clean_upper(t) for t in rileggi(label, 0.45, 0.75)]
-        cands = [c for c in cands if len(c.replace(" ", "")) >= 2 and not is_label(c)]
         key = lambda s: re.sub(r"[^A-Z]", "", s or "")
+        validi = lambda cs: [c for c in cs if len(c.replace(" ", "")) >= 2 and not is_label(c)]
+        # Con la MRZ verificata che conferma gia' la lettura del fronte, la rilettura mirata
+        # (la parte piu' lenta) aggiungerebbe solo altri voti allo stesso nome
+        if mrz_val and any(key(c) == key(mrz_val) for c in validi(cands)):
+            return vote([c for c in validi(cands) if key(c) == key(mrz_val)])[0]
+        cands += [clean_upper(t) for t in rileggi(label, 0.45, 0.75)]
+        cands = validi(cands)
         if mrz_val:
             same = [c for c in cands if key(c) == key(mrz_val)]
             return vote(same)[0] or mrz_val
@@ -1596,10 +1640,17 @@ def classify(pages: list[PageOCR]) -> str | None:
     return "CIE" if cie >= ts else "TS"
 
 
+# Lato lungo dell'immagine su cui si valuta l'orientamento: una carta scansionata (~1000 px)
+# si ingrandisce 2x come prima, una foto o un A4 si riduce invece di ingrandirsi
+LATO_ORIENTAMENTO = 2000
+
+
 def _orientation_score(rgb: np.ndarray) -> int:
-    gray = cv2.resize(
-        cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY), None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC
-    )
+    k = min(2.0, LATO_ORIENTAMENTO / max(rgb.shape[:2]))
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    if k != 1:
+        interp = cv2.INTER_CUBIC if k > 1 else cv2.INTER_AREA
+        gray = cv2.resize(gray, None, fx=k, fy=k, interpolation=interp)
     d = pytesseract.image_to_data(
         gray, lang=TESS_LANG, config="--psm 11", output_type=pytesseract.Output.DICT
     )
@@ -1620,6 +1671,8 @@ def fix_orientation(rgb: np.ndarray, min_score: int = 12) -> np.ndarray:
         s = _orientation_score(cand)
         if s > best_score:
             best, best_score = cand, s
+        if best_score >= min_score:
+            break
     return best
 
 
