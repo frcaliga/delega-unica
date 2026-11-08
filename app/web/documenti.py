@@ -1,11 +1,9 @@
 """Documenti d'identita' dalle pagine: lettura dei dati, archivio e precompilazione."""
 
-import base64
 import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
-from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, Response
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -18,6 +16,7 @@ from app.routers import documenti_identita as api
 from app.schemas.deleghe import ClienteIn, ClienteUpdate
 from app.schemas.documenti_identita import PropostaOut
 from app.services import documenti_identita as servizio
+from app.services import letture
 from app.services.cifratura import Portachiavi, get_portachiavi
 from app.web import clienti as web_clienti
 from app.web.base import errori_da, pagina, vai, vuoto_a_none
@@ -51,26 +50,50 @@ def _file(uploads: list[UploadFile] | None) -> list[UploadFile]:
     return [u for u in uploads or [] if u.filename]
 
 
-async def _proposta(
-    uploads: list[UploadFile] | None, cf: str | None
-) -> tuple[PropostaOut | None, list, str | None]:
-    """Proposta letta dalla copia, errori e anteprima (data URI) di fronte e retro."""
+async def _avvia_lettura(
+    request: Request,
+    db: Session,
+    portachiavi: Portachiavi,
+    user: User,
+    uploads: list[UploadFile] | None,
+    cf: str | None,
+    poll: str,
+) -> Response:
+    """Avvia la lettura in background e risponde con il frammento che ne chiede l'esito."""
     if not (scelti := _file(uploads)):
-        return None, ["Scegliere il file con la copia del documento"], None
-    try:
-        copia = await api.leggi_upload(scelti)
-    except HTTPException as exc:
-        return None, errori_da(exc), None
-    proposta = await api.leggi_proposta(copia, cf)
-    return proposta, [], await run_in_threadpool(_anteprima_inline, copia)
+        errori = ["Scegliere il file con la copia del documento"]
+    else:
+        try:
+            copia = await api.leggi_upload(scelti)
+        except HTTPException as exc:
+            errori = errori_da(exc)
+        else:
+            lettura = letture.crea(db, portachiavi, user, copia, cf)
+            return pagina(
+                request,
+                "_lettura_in_corso.html",
+                {"url": f"{poll}?lettura={lettura.id}", "secondi": 0},
+                user=user,
+            )
+    return pagina(request, "_lettura_in_corso.html", {"errori": errori}, user=user)
 
 
-def _anteprima_inline(copia: servizio.Copia) -> str | None:
-    try:
-        jpeg = servizio.anteprima(copia.dati, copia.tipo)
-    except Exception:
-        return None
-    return "data:image/jpeg;base64," + base64.b64encode(jpeg).decode()
+def _attesa_o_esito(
+    request: Request, user: User, esito: letture.Esito, url: str
+) -> Response | None:
+    """Frammento di attesa, o di errore; None quando l'esito e' pronto."""
+    if esito.stato == "in_corso":
+        return pagina(
+            request, "_lettura_in_corso.html", {"url": url, "secondi": esito.secondi}, user=user
+        )
+    if esito.stato != "pronta":
+        errore = (
+            "La lettura non e' riuscita: compilare i campi a mano o riprovare con un'altra foto"
+            if esito.stato == "errore"
+            else "Lettura non trovata: avviarla di nuovo"
+        )
+        return pagina(request, "_lettura_in_corso.html", {"errori": [errore]}, user=user)
+    return None
 
 
 def _estremi(form) -> tuple[dict, list[str]]:
@@ -134,20 +157,39 @@ async def leggi(
     copia: list[UploadFile] | None = None,
     user: User = Depends(utente_web),
     db: Session = Depends(get_db),
+    portachiavi: Portachiavi = Depends(get_portachiavi),
 ) -> Response:
-    """Frammento HTMX: estremi e anagrafica letti dal documento, da confermare."""
+    """Frammento HTMX: avvia la lettura del documento caricato nella scheda."""
     cliente = api_clienti.get_cliente(db, user, cliente_id)
-    proposta, errori, anteprima = await _proposta(copia, cliente.codice_fiscale)
-    dati = dati_da_proposta(proposta) if proposta else {}
+    poll = f"/studio/clienti/{cliente.id}/documenti/lettura"
+    return await _avvia_lettura(request, db, portachiavi, user, copia, cliente.codice_fiscale, poll)
+
+
+@router.post("/clienti/{cliente_id}/documenti/lettura", response_class=HTMLResponse)
+def lettura_scheda(
+    request: Request,
+    cliente_id: uuid.UUID,
+    lettura: uuid.UUID,
+    user: User = Depends(utente_web),
+    db: Session = Depends(get_db),
+    portachiavi: Portachiavi = Depends(get_portachiavi),
+) -> Response:
+    """Esito della lettura: a lettura conclusa sostituisce estremi e anagrafica da confermare."""
+    cliente = api_clienti.get_cliente(db, user, cliente_id)
+    esito = letture.esito(db, portachiavi, user, lettura)
+    url = f"/studio/clienti/{cliente.id}/documenti/lettura?lettura={lettura}"
+    if (risposta := _attesa_o_esito(request, user, esito, url)) is not None:
+        return risposta
     return pagina(
         request,
         "_documento_campi.html",
         {
             "cliente": cliente,
-            "dati_documento": dati,
-            "proposta": proposta,
-            "errori": errori,
-            "anteprima": anteprima,
+            "dati_documento": dati_da_proposta(esito.proposta),
+            "proposta": esito.proposta,
+            "errori": None,
+            "anteprima": esito.anteprima,
+            "oob": True,
         },
         user=user,
     )
@@ -255,35 +297,57 @@ async def leggi_nuovo(
     request: Request,
     copia: list[UploadFile] | None = None,
     user: User = Depends(utente_web),
+    db: Session = Depends(get_db),
+    portachiavi: Portachiavi = Depends(get_portachiavi),
 ) -> Response:
     form = await request.form()
+    dati, _ = _senza_letture_precedenti(form)
+    cf = (dati.get("codice_fiscale") or "").upper() or None
+    poll = "/studio/clienti/nuovo/lettura"
+    return await _avvia_lettura(request, db, portachiavi, user, copia, cf, poll)
+
+
+def _senza_letture_precedenti(form) -> tuple[dict, set[str]]:
+    """Campi del modulo senza quelli compilati dalla lettura precedente: con un altro documento
+    non devono restare i dati della persona di prima. Restano quelli scritti a mano."""
     dati = {k: vuoto_a_none(form.get(k)) for k in web_clienti.CAMPI}
-    # I campi compilati dalla lettura precedente si svuotano: con un altro documento non devono
-    # restare i dati della persona di prima. Restano solo quelli scritti a mano.
     precedenti = set(str(form.get("campi_letti") or "").split(",")) & set(web_clienti.CAMPI)
     for k in precedenti:
         dati[k] = None
+    return dati, precedenti
+
+
+@router.post("/clienti/nuovo/lettura", response_class=HTMLResponse)
+async def lettura_nuovo(
+    request: Request,
+    lettura: uuid.UUID,
+    user: User = Depends(utente_web),
+    db: Session = Depends(get_db),
+    portachiavi: Portachiavi = Depends(get_portachiavi),
+) -> Response:
+    """Esito della lettura: a lettura conclusa compila anagrafica ed estremi del nuovo cliente."""
+    esito = letture.esito(db, portachiavi, user, lettura)
+    url = f"/studio/clienti/nuovo/lettura?lettura={lettura}"
+    if (risposta := _attesa_o_esito(request, user, esito, url)) is not None:
+        return risposta
+    form = await request.form()
+    dati, _ = _senza_letture_precedenti(form)
     cf = (dati.get("codice_fiscale") or "").upper() or None
-    proposta, errori, anteprima = await _proposta(copia, cf)
     letti: list[str] = []
-    if proposta:
-        for k, v in dati_da_proposta(proposta).items():
-            if v and (k != "codice_fiscale" or not cf):
-                dati[k] = v
-                letti.append(k)
-    elif not _file(copia):
-        letti = sorted(precedenti)  # nessun file scelto: la lettura precedente resta valida
-        for k in precedenti:
-            dati[k] = vuoto_a_none(form.get(k))
+    for k, v in dati_da_proposta(esito.proposta).items():
+        if v and (k != "codice_fiscale" or not cf):
+            dati[k] = v
+            letti.append(k)
     return pagina(
         request,
         "_nuovo_cliente_campi.html",
         {
             "dati": dati,
-            "proposta": proposta,
-            "errori": errori,
+            "proposta": esito.proposta,
+            "errori": None,
             "campi_letti": ",".join(letti),
-            "anteprima": anteprima,
+            "anteprima": esito.anteprima,
+            "oob": True,
         },
         user=user,
     )

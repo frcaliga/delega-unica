@@ -1,9 +1,12 @@
 """Documenti d'identita': MRZ, confronto col codice fiscale, cifratura, lettura e archivio."""
 
 import io
+import re
 import shutil
+import uuid
 from datetime import date
 
+import numpy as np
 import pytest
 from PIL import Image
 from sqlalchemy import select, text
@@ -291,12 +294,31 @@ def test_anagrafica_con_data_di_nascita_e_sesso(client, headers, mario):
 # Pagine
 
 
+@pytest.fixture(autouse=True)
+def _letture_immediate(monkeypatch):
+    """Le letture in background girano subito, nel thread del test."""
+    from app.services import letture
+
+    monkeypatch.setattr(letture, "avvia", lambda lavoro: lavoro())
+
+
+def _leggi(browser, url: str, data: dict, files, target: str):
+    """Avvia la lettura dalla pagina e ne chiede l'esito, come fa il frammento HTMX."""
+    avvio = browser.post(url, data, files=files, htmx="stato-lettura")
+    assert avvio.status_code == 200, avvio.text
+    trovato = re.search(r'hx-post="([^"]+)"', avvio.text)
+    assert trovato, avvio.text
+    esito = browser.post(trovato.group(1).replace("&amp;", "&"), data, htmx="stato-lettura")
+    assert esito.status_code == 200, esito.text
+    assert f'id="{target}" hx-swap-oob="outerHTML"' in esito.text, esito.text
+    return esito
+
+
 @tesseract
 def test_pagine_nuovo_cliente_dal_documento_e_adesione_fea(browser, sms_finti, db, _oggi):
     copia = _copia_mario()
-    letti = browser.post("/studio/clienti/nuovo/leggi", {}, files=copia, htmx="campi-nuovo-cliente")
-    assert letti.status_code == 200, letti.text
-    assert 'id="campi-nuovo-cliente"' in letti.text and "<html" not in letti.text
+    letti = _leggi(browser, "/studio/clienti/nuovo/leggi", {}, copia, "campi-nuovo-cliente")
+    assert "<html" not in letti.text
     for valore in ("Rossi", "Mario", "1980-01-01", "2031-01-01"):
         assert f'value="{valore}"' in letti.text, valore
     assert MARIO in letti.text
@@ -357,10 +379,10 @@ def test_pagina_scheda_carica_documento_e_aggiorna_anagrafica(browser, db):
 
     cliente_id = _crea_cliente(browser)
     copia = _copia_mario()
-    letti = browser.post(
-        f"/studio/clienti/{cliente_id}/documenti/leggi", {}, files=copia, htmx="campi-documento"
+    letti = _leggi(
+        browser, f"/studio/clienti/{cliente_id}/documenti/leggi", {}, copia, "campi-documento"
     )
-    assert letti.status_code == 200 and 'value="1980-01-01"' in letti.text
+    assert 'value="1980-01-01"' in letti.text
     senza_file = browser.post(f"/studio/clienti/{cliente_id}/documenti", {"documento_tipo": "1"})
     assert senza_file.status_code == 422 and "copia del documento" in senza_file.text
     res = browser.post(
@@ -456,13 +478,13 @@ def test_nuovo_cliente_altro_documento_svuota_i_campi_letti_prima(browser):
         "nome": "Mario",
         "telefono": "+393331234567",
     }
-    res = browser.post(
+    res = _leggi(
+        browser,
         "/studio/clienti/nuovo/leggi",
         precedenti,
-        files={"copia": ("altro.png", bianca.getvalue(), "image/png")},
-        htmx="campi-nuovo-cliente",
+        {"copia": ("altro.png", bianca.getvalue(), "image/png")},
+        "campi-nuovo-cliente",
     )
-    assert res.status_code == 200, res.text
     assert MARIO not in res.text and 'value="Rossi"' not in res.text
     assert 'value="+393331234567"' in res.text  # scritto a mano: resta
 
@@ -470,7 +492,7 @@ def test_nuovo_cliente_altro_documento_svuota_i_campi_letti_prima(browser):
 @tesseract
 def test_anteprima_di_fronte_e_retro(browser, db):
     copia = _copia_mario()
-    letti = browser.post("/studio/clienti/nuovo/leggi", {}, files=copia, htmx="campi-nuovo-cliente")
+    letti = _leggi(browser, "/studio/clienti/nuovo/leggi", {}, copia, "campi-nuovo-cliente")
     assert 'src="data:image/jpeg;base64,' in letti.text
 
     dati = {"codice_fiscale": MARIO, "cognome": "Rossi", "nome": "Mario", "documento_tipo": "1"}
@@ -485,3 +507,81 @@ def test_anteprima_di_fronte_e_retro(browser, db):
     assert Image.open(io.BytesIO(img.content)).width <= 1000
     motivi = [a.details.get("motivo") for a in db.scalars(select(AuditLog))]
     assert "anteprima" in motivi
+
+
+def test_lettura_in_background(browser, db, monkeypatch):
+    from app.models import LetturaDocumento
+    from app.services import letture
+
+    in_coda = []
+    monkeypatch.setattr(letture, "avvia", in_coda.append)
+    avvio = browser.post(
+        "/studio/clienti/nuovo/leggi", {}, files=_copia_mario(), htmx="stato-lettura"
+    )
+    url = re.search(r'hx-post="([^"]+)"', avvio.text).group(1).replace("&amp;", "&")
+    attesa = browser.post(url, {}, htmx="stato-lettura")
+    assert "Lettura del documento in corso" in attesa.text and url in attesa.text.replace(
+        "&amp;", "&"
+    )
+    # esito cifrato nel database, mai in chiaro
+    monkeypatch.setattr(
+        lettura_documenti,
+        "leggi",
+        lambda *a, **k: lettura_documenti.Lettura(cognome="Rossi", nome="Mario"),
+    )
+    in_coda.pop()()
+    riga = db.scalars(select(LetturaDocumento)).one()
+    db.refresh(riga)
+    assert riga.stato == "pronta" and b"Rossi" not in riga.esito_cifrato
+    pronta = browser.post(url, {}, htmx="stato-lettura")
+    assert 'value="Rossi"' in pronta.text
+    # consegnata una volta sola
+    assert db.scalars(select(LetturaDocumento)).first() is None
+    assert "Lettura non trovata" in browser.post(url, {}, htmx="stato-lettura").text
+
+
+def test_lettura_di_un_altro_utente_non_si_vede(browser, db, monkeypatch):
+    from app.models import LetturaDocumento
+
+    estranea = LetturaDocumento(tenant_id=uuid.uuid4(), user_id=uuid.uuid4(), stato="in_corso")
+    url = f"/studio/clienti/nuovo/lettura?lettura={estranea.id or uuid.uuid4()}"
+    assert "Lettura non trovata" in browser.post(url, {}, htmx="stato-lettura").text
+
+
+def test_tempo_massimo_della_lettura(monkeypatch):
+    """Scaduto il tempo, le letture mirate non girano e l'estrazione avvisa."""
+    chiamate = []
+    monkeypatch.setattr(
+        ocr_documenti.pytesseract, "image_to_string", lambda *a, **k: chiamate.append(1) or "X"
+    )
+    img = np.full((200, 400, 3), 255, np.uint8)
+
+    def estrai(rgbs, *a):
+        return {"testo": ocr_documenti.ocr_crop(rgbs[0], (0, 0, 400, 200), "ABC"), "avvisi": []}
+
+    monkeypatch.setattr(ocr_documenti, "_process_pages", estrai)
+    dati = ocr_documenti.process_pages([img], None, tempo_max=1e-9)
+    assert not chiamate and set(dati["testo"]) == {""}
+    assert any("tempo massimo" in a for a in dati["avvisi"])
+    senza_limite = ocr_documenti.process_pages([img], None)
+    assert chiamate and "X" in senza_limite["testo"] and not senza_limite["avvisi"]
+
+
+def test_scheda_con_deleghe_e_documenti(browser, db):
+    from tests.test_web import _crea_cliente, _crea_delega
+
+    cliente_id = _crea_cliente(browser)
+    _crea_delega(browser, cliente_id)
+    res = browser.post(
+        f"/studio/clienti/{cliente_id}/documenti",
+        {
+            "documento_tipo": "1",
+            "documento_numero": "CA00000AA",
+            "documento_scadenza": "2031-01-01",
+        },
+        files=_copia_mario(),
+    )
+    assert res.status_code == 303, res.text
+    scheda = browser.get(f"/studio/clienti/{cliente_id}")
+    assert scheda.status_code == 200, scheda.text
+    assert scheda.text.count("anteprima.jpg") == 1

@@ -113,7 +113,11 @@ def da_estrazione(d: dict) -> Lettura:
 
 
 def leggi(
-    dati: bytes, tipo: str, oggi: date | None = None, foto: list[bytes] | None = None
+    dati: bytes,
+    tipo: str,
+    oggi: date | None = None,
+    foto: list[bytes] | None = None,
+    tempo_max: float | None = None,
 ) -> Lettura:
     """Legge la copia; `foto`, se date, sono le immagini originali di fronte e retro (la copia
     e' il PDF che le unisce) e si leggono al posto del PDF, ritagliate sulla carta."""
@@ -125,9 +129,11 @@ def leggi(
 
     try:
         if foto:
-            estratti = ocr_documenti.process_images(foto, comuni())
+            estratti = ocr_documenti.process_images(foto, comuni(), tempo_max)
         else:
-            estratti = ocr_documenti.process_bytes(dati, tipo == "application/pdf", comuni())
+            estratti = ocr_documenti.process_bytes(
+                dati, tipo == "application/pdf", comuni(), tempo_max
+            )
     except pytesseract.TesseractNotFoundError as exc:
         raise LetturaNonDisponibile("Tesseract non installato") from exc
     except Exception:  # file illeggibile: la copia si conserva comunque

@@ -31,14 +31,6 @@
         {% endif %}
       </td>
     </tr>
-    <tr class="riga-anteprima">
-      <td colspan="5">
-        <details>
-          <summary>Fronte e retro</summary>
-          <img class="anteprima-archivio" loading="lazy" src="/studio/documenti/{{ doc.id }}/anteprima.jpg" alt="Fronte e retro del documento {{ doc.numero or '' }}">
-        </details>
-      </td>
-    </tr>
     {% endfor %}
     </tbody>
   </table>
@@ -90,9 +82,10 @@
         <label class="campo"><span>Copia del documento <abbr title="obbligatorio">*</abbr></span>
           <input type="file" name="copia" accept="application/pdf,image/jpeg,image/png" multiple required>
           <small>CIE, carta cartacea, passaporto o tessera sanitaria: un PDF con fronte e retro, oppure due foto (fronte e retro). Fino a 10 MB.</small></label>
-        <button type="button" class="secondario" hx-post="/studio/clienti/{{ cliente.id }}/documenti/leggi" hx-indicator="#lettura-in-corso" hx-disabled-elt="this" hx-encoding="multipart/form-data" hx-include="closest form" hx-target="#campi-documento" hx-swap="outerHTML">Leggi i dati</button>
-        <span id="lettura-in-corso" class="indicatore" role="status">Lettura in corso, qualche secondo&hellip;</span>
+        <button type="button" class="secondario" hx-post="/studio/clienti/{{ cliente.id }}/documenti/leggi" hx-indicator="#invio-in-corso" hx-disabled-elt="this" hx-encoding="multipart/form-data" hx-include="closest form" hx-target="#stato-lettura" hx-swap="innerHTML">Leggi i dati</button>
+        <span id="invio-in-corso" class="indicatore" role="status">Invio del documento&hellip;</span>
       </div>
+      <div id="stato-lettura" aria-live="polite"></div>
       {% set errori = none %}{% set proposta = none %}
       {% include "_documento_campi.html" %}
       <p class="nota">La copia e' conservata cifrata e si puo' eliminare quando non serve piu'.</p>

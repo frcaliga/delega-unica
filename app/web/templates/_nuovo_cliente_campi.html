@@ -1,6 +1,6 @@
 {# Anagrafica ed estremi del documento del nuovo cliente: si sostituisce con HTMX dopo la lettura #}
 {% import "_macro.html" as m with context %}
-<div id="campi-nuovo-cliente">
+<div id="campi-nuovo-cliente"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
   <input type="hidden" name="campi_letti" value="{{ campi_letti or '' }}">
   {{ m.errori(errori) }}
   {% include "_proposta.html" %}

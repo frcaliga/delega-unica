@@ -1,6 +1,6 @@
 {# Estremi del documento e dati anagrafici, precompilati dalla lettura: si sostituisce con HTMX #}
 {% import "_macro.html" as m with context %}
-<div id="campi-documento">
+<div id="campi-documento"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
   {{ m.errori(errori) }}
   {% include "_proposta.html" %}
   {% set d = dati_documento %}

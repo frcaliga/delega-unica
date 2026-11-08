@@ -5,6 +5,7 @@ from app.models.delega import Delega, StatoDelega
 from app.models.documento import DocumentoFirmato
 from app.models.documento_identita import DocumentoIdentita
 from app.models.fea import AdesioneFea, EvidenzaFirma, ScopoOtp, SessioneOtp, StatoAdesione
+from app.models.lettura_documento import LetturaDocumento
 from app.models.registro import VoceRegistro
 from app.models.tenant import Tenant
 from app.models.user import Role, User
@@ -18,6 +19,7 @@ __all__ = [
     "DocumentoFirmato",
     "DocumentoIdentita",
     "EvidenzaFirma",
+    "LetturaDocumento",
     "Role",
     "ScopoOtp",
     "SessioneOtp",

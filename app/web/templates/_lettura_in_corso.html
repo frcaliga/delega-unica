@@ -1,0 +1,15 @@
+{# Lettura del documento in background: si richiede l'esito ogni 2 secondi finche' e' pronto.
+   La richiesta porta i campi del modulo (non il file) e, a lettura conclusa, la risposta
+   sostituisce i campi con un aggiornamento fuori banda. #}
+{% import "_macro.html" as m with context %}
+{% if errori %}
+{{ m.errori(errori) }}
+{% else %}
+<p class="lettura-in-corso" role="status"
+   hx-post="{{ url }}" hx-trigger="load delay:2s" hx-params="not copia"
+   hx-target="#stato-lettura" hx-swap="innerHTML">
+  <span class="rotella" aria-hidden="true"></span>
+  Lettura del documento in corso{% if secondi %} ({{ secondi }} s){% endif %}&hellip;
+  Intanto si possono compilare gli altri campi.
+</p>
+{% endif %}
