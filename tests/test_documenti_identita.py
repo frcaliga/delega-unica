@@ -443,3 +443,25 @@ def test_elenco_comuni_istat_in_windows_1252(tmp_path):
         elenco = ocr_documenti.load_comuni(f)
         assert elenco["D704"] == ("Forlì", "FC")
         assert elenco["A952"] == ("Bolzano", "BZ")
+
+
+@tesseract
+def test_nuovo_cliente_altro_documento_svuota_i_campi_letti_prima(browser):
+    bianca = io.BytesIO()
+    Image.new("RGB", (800, 500), "white").save(bianca, "PNG")
+    precedenti = {
+        "campi_letti": "codice_fiscale,cognome,nome",
+        "codice_fiscale": MARIO,
+        "cognome": "Rossi",
+        "nome": "Mario",
+        "telefono": "+393331234567",
+    }
+    res = browser.post(
+        "/studio/clienti/nuovo/leggi",
+        precedenti,
+        files={"copia": ("altro.png", bianca.getvalue(), "image/png")},
+        htmx="campi-nuovo-cliente",
+    )
+    assert res.status_code == 200, res.text
+    assert MARIO not in res.text and 'value="Rossi"' not in res.text
+    assert 'value="+393331234567"' in res.text  # scritto a mano: resta

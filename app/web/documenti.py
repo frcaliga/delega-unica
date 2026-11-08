@@ -221,16 +221,28 @@ async def leggi_nuovo(
     user: User = Depends(utente_web),
 ) -> Response:
     form = await request.form()
-    cf = (vuoto_a_none(form.get("codice_fiscale")) or "").upper() or None
-    proposta, errori = await _proposta(copia, cf)
     dati = {k: vuoto_a_none(form.get(k)) for k in web_clienti.CAMPI}
+    # I campi compilati dalla lettura precedente si svuotano: con un altro documento non devono
+    # restare i dati della persona di prima. Restano solo quelli scritti a mano.
+    precedenti = set(str(form.get("campi_letti") or "").split(",")) & set(web_clienti.CAMPI)
+    for k in precedenti:
+        dati[k] = None
+    cf = (dati.get("codice_fiscale") or "").upper() or None
+    proposta, errori = await _proposta(copia, cf)
+    letti: list[str] = []
     if proposta:
-        letti = dati_da_proposta(proposta)
-        dati.update({k: v for k, v in letti.items() if v and (k != "codice_fiscale" or not cf)})
+        for k, v in dati_da_proposta(proposta).items():
+            if v and (k != "codice_fiscale" or not cf):
+                dati[k] = v
+                letti.append(k)
+    elif not _file(copia):
+        letti = sorted(precedenti)  # nessun file scelto: la lettura precedente resta valida
+        for k in precedenti:
+            dati[k] = vuoto_a_none(form.get(k))
     return pagina(
         request,
         "_nuovo_cliente_campi.html",
-        {"dati": dati, "proposta": proposta, "errori": errori},
+        {"dati": dati, "proposta": proposta, "errori": errori, "campi_letti": ",".join(letti)},
         user=user,
     )
 

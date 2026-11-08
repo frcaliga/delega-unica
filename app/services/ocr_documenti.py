@@ -1630,6 +1630,13 @@ def process_bytes(dati: bytes, pdf: bool, comuni: dict | None = None) -> dict:
     return process_pages(load_pages_bytes(dati, pdf), comuni)
 
 
+def process_images(immagini: list[bytes], comuni: dict | None = None) -> dict:
+    """Come process_bytes, per piu' foto dello stesso documento (fronte e retro): ogni foto e'
+    ritagliata sulla carta e raddrizzata, come una foto caricata da sola."""
+    pagine = [p for dati in immagini for p in load_pages_bytes(dati, False)]
+    return process_pages(pagine, comuni)
+
+
 def process_file(path: Path, comuni: dict | None, verbose: bool = False) -> dict:
     data = process_pages(load_pages(path), comuni, verbose, path.name)
     data["file"] = path.name

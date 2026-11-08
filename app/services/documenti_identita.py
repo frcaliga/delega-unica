@@ -3,7 +3,7 @@
 import hashlib
 import io
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 from app.domain import codice_fiscale
@@ -27,6 +27,9 @@ class Copia:
     dati: bytes
     tipo: str
     nome: str
+    # Per fronte e retro uniti in un PDF: le foto originali, che si leggono ciascuna
+    # ritagliata sulla carta (il PDF ne perde la geometria)
+    foto: list[bytes] = field(default_factory=list)
 
     @property
     def sha256(self) -> str:
@@ -67,7 +70,7 @@ def unisci(copie: list[Copia]) -> tuple[Copia | None, str]:
     buf = io.BytesIO()
     pagine[0].save(buf, "PDF", save_all=True, append_images=pagine[1:], resolution=300)
     nome = copie[0].nome.rsplit(".", 1)[0][:140] + ".pdf"
-    unita = Copia(buf.getvalue(), "application/pdf", nome)
+    unita = Copia(buf.getvalue(), "application/pdf", nome, foto=[c.dati for c in copie])
     if len(unita.dati) > MAX_COPIA:
         return None, "Fronte e retro insieme superano 10 MB"
     return unita, ""
@@ -75,7 +78,7 @@ def unisci(copie: list[Copia]) -> tuple[Copia | None, str]:
 
 def proposta(copia: Copia, oggi: date, cf_cliente: str | None = None) -> PropostaOut:
     try:
-        esito = lettura_documenti.leggi(copia.dati, copia.tipo, oggi)
+        esito = lettura_documenti.leggi(copia.dati, copia.tipo, oggi, foto=copia.foto)
     except lettura_documenti.LetturaNonDisponibile:
         return PropostaOut(letta=False, avvisi=["Lettura automatica non disponibile"])
     p = PropostaOut(
