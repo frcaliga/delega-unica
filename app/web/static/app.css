@@ -117,6 +117,8 @@ button.link { background: none; border: none; color: var(--primario); padding: 0
 .avviso ul { margin: 0.35rem 0 0; padding-left: 1.25rem; }
 .avviso.ok { background: var(--ok-sfondo); color: var(--ok-testo); }
 .avviso.errore { background: var(--errore-sfondo); color: var(--errore-testo); }
+.errore-richiesta { position: sticky; top: 0.5rem; z-index: 10; }
+.errore-richiesta[hidden] { display: none; }
 .avviso.attenzione { background: #fff6e0; color: #6b4600; border: 1px solid #e4c27a; }
 
 .stato {
