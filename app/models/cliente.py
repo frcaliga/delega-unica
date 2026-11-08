@@ -1,4 +1,6 @@
-from sqlalchemy import Boolean, String, UniqueConstraint
+from datetime import date
+
+from sqlalchemy import Boolean, Date, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, IdMixin, TenantScopedMixin, TimestampMixin
@@ -18,6 +20,11 @@ class Cliente(IdMixin, TimestampMixin, TenantScopedMixin, Base):
     partita_iva_attiva: Mapped[bool] = mapped_column(Boolean, default=False)
     email: Mapped[str | None] = mapped_column(String(320))
     telefono: Mapped[str | None] = mapped_column(String(30))
+    # Persona fisica: letti dal documento d'identita' o inseriti a mano
+    data_nascita: Mapped[date | None] = mapped_column(Date)
+    sesso: Mapped[str | None] = mapped_column(String(1))
+    # Comune (e provincia) o Stato estero di nascita
+    luogo_nascita: Mapped[str | None] = mapped_column(String(100))
 
     @property
     def persona_fisica(self) -> bool:

@@ -1,0 +1,28 @@
+{# Estremi del documento e dati anagrafici, precompilati dalla lettura: si sostituisce con HTMX #}
+{% import "_macro.html" as m with context %}
+<div id="campi-documento">
+  {{ m.errori(errori) }}
+  {% include "_proposta.html" %}
+  {% set d = dati_documento %}
+  <div class="riga">
+    {{ m.scelta("documento_tipo", "Documento", TIPI_DOCUMENTO, d.get("documento_tipo") or "1", obbligatorio=true) }}
+    {{ m.campo("documento_numero", "Numero", d.get("documento_numero"), attr='maxlength="30" class="maiuscolo"') }}
+  </div>
+  <div class="riga">
+    {{ m.campo("documento_rilasciato_da", "Rilasciato da", d.get("documento_rilasciato_da"), aiuto="Ad esempio: Comune di Roma. Si legge dal fronte della CIE", attr='maxlength="100"') }}
+    {{ m.campo("documento_scadenza", "Scadenza", d.get("documento_scadenza"), tipo="date") }}
+  </div>
+  <fieldset class="gruppo">
+    <legend>Dati anagrafici letti</legend>
+    <div class="riga">
+      {{ m.campo("cognome", "Cognome", d.get("cognome")) }}
+      {{ m.campo("nome", "Nome", d.get("nome")) }}
+    </div>
+    <div class="riga">
+      {{ m.campo("data_nascita", "Data di nascita", d.get("data_nascita"), tipo="date") }}
+      {{ m.scelta("sesso", "Sesso", SESSI, d.get("sesso") or "", vuota="") }}
+    </div>
+    {{ m.campo("luogo_nascita", "Luogo di nascita", d.get("luogo_nascita"), attr='maxlength="100"') }}
+    <label class="spunta"><input type="checkbox" name="aggiorna_anagrafica" {% if d.get("aggiorna_anagrafica") %}checked{% endif %}> Aggiorna l'anagrafica del cliente con questi dati</label>
+  </fieldset>
+</div>

@@ -83,6 +83,12 @@ data "aws_iam_policy_document" "task" {
   }
 
   statement {
+    # Copie cifrate dei documenti d'identita'
+    actions   = ["kms:GenerateDataKey", "kms:Decrypt"]
+    resources = [aws_kms_key.documenti.arn]
+  }
+
+  statement {
     # RDS ruota la password del database: l'applicazione la rilegge quando cambia
     actions   = ["secretsmanager:GetSecretValue"]
     resources = [local.segreto_db]
@@ -121,12 +127,13 @@ locals {
   segreto_db = aws_db_instance.database.master_user_secret[0].secret_arn
 }
 
+# 1 vCPU: la lettura dei documenti d'identita' (Tesseract) usa piu' processori in parallelo
 resource "aws_ecs_task_definition" "applicazione" {
   family                   = var.nome
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 512
-  memory                   = 1024
+  cpu                      = 1024
+  memory                   = 2048
   execution_role_arn       = aws_iam_role.esecuzione.arn
   task_role_arn            = aws_iam_role.task.arn
 
@@ -149,6 +156,7 @@ resource "aws_ecs_task_definition" "applicazione" {
         { name = "REQUIRE_MFA", value = "true" },
         { name = "AWS_REGION", value = var.regione },
         { name = "FEA_CA_KMS_KEY_ID", value = aws_kms_key.ca_fea.arn },
+        { name = "DOCUMENTI_KMS_KEY_ID", value = aws_kms_key.documenti.arn },
         { name = "SMS_PROVIDER", value = "sns" },
         { name = "SMS_MITTENTE", value = var.sms_mittente },
       ]

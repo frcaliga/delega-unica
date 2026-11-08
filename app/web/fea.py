@@ -16,6 +16,7 @@ from app.routers import fea as api
 from app.routers.clienti import get_cliente
 from app.schemas.fea import CodiceIn
 from app.services import ca_fea, fea, sms
+from app.services.cifratura import Portachiavi, get_portachiavi
 from app.web import clienti as web_clienti
 from app.web import deleghe as web_deleghe
 from app.web.base import errori_da, htmx_target, pagina, vai, vuoto_a_none
@@ -32,6 +33,7 @@ async def crea_adesione(
     user: User = Depends(utente_web),
     db: Session = Depends(get_db),
     invio: sms.InvioSms = Depends(sms.get_sms),
+    portachiavi: Portachiavi = Depends(get_portachiavi),
 ) -> Response:
     """Identificazione di persona: documento esibito, copia e cellulare. Invia l'OTP di conferma."""
     cliente = get_cliente(db, user, cliente_id)
@@ -42,7 +44,16 @@ async def crea_adesione(
         "documento_rilasciato_da": vuoto_a_none(form.get("documento_rilasciato_da")),
         "documento_scadenza": vuoto_a_none(form.get("documento_scadenza")),
         "cellulare": vuoto_a_none(form.get("cellulare")) or cliente.telefono,
+        "documento_identita_id": vuoto_a_none(form.get("documento_identita_id")),
     }
+    archiviato = None
+    if dati["documento_identita_id"]:
+        try:
+            archiviato = uuid.UUID(dati["documento_identita_id"])
+        except ValueError:
+            dati["documento_identita_id"] = None
+    if copia_documento is not None and not copia_documento.filename:
+        copia_documento = None
     errori = []
     if dati["documento_tipo"] not in TipoDocumento._value2member_map_:
         errori.append("Indicare il tipo di documento")
@@ -56,15 +67,15 @@ async def crea_adesione(
         errori.append("Indicare la data di scadenza del documento")
     if not dati["cellulare"]:
         errori.append("Indicare il cellulare del cliente")
-    if copia_documento is None or not copia_documento.filename:
+    if copia_documento is None and archiviato is None:
         errori.append("Allegare la copia del documento esibito")
     if not errori:
-        assert copia_documento is not None
         try:
             adesione = await api.crea_adesione(
                 cliente.id,
                 request=request,
                 copia_documento=copia_documento,
+                documento_identita_id=None if copia_documento else archiviato,
                 documento_tipo=TipoDocumento(dati["documento_tipo"]),
                 documento_numero=dati["documento_numero"],
                 documento_rilasciato_da=dati["documento_rilasciato_da"],
@@ -73,6 +84,7 @@ async def crea_adesione(
                 user=user,
                 db=db,
                 invio=invio,
+                portachiavi=portachiavi,
             )
         except HTTPException as exc:
             db.rollback()

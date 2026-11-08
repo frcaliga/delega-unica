@@ -74,6 +74,10 @@ table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
 th, td { text-align: left; padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--bordo); vertical-align: top; }
 th { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--tenue); font-weight: 600; }
 td small { color: var(--tenue); }
+/* Sui telefoni le tabelle scorrono dentro il riquadro invece di essere tagliate */
+@media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+.indicatore { display: none; color: var(--tenue); font-size: 0.9rem; }
+.indicatore.htmx-request { display: inline; }
 .azioni-riga { white-space: nowrap; text-align: right; }
 
 form { margin: 0; }
@@ -113,6 +117,7 @@ button.link { background: none; border: none; color: var(--primario); padding: 0
 .avviso ul { margin: 0.35rem 0 0; padding-left: 1.25rem; }
 .avviso.ok { background: var(--ok-sfondo); color: var(--ok-testo); }
 .avviso.errore { background: var(--errore-sfondo); color: var(--errore-testo); }
+.avviso.attenzione { background: #fff6e0; color: #6b4600; border: 1px solid #e4c27a; }
 
 .stato {
   display: inline-block; font-size: 0.78rem; font-weight: 600; padding: 0.15rem 0.55rem;
@@ -121,6 +126,7 @@ button.link { background: none; border: none; color: var(--primario); padding: 0
 }
 .stato-in_firma, .stato-firmata, .stato-inviata, .adesione-da_confermare { color: #8a5a00; border-color: #e4c27a; background: #fff6e0; }
 .stato-attiva, .stato-accettata, .adesione-attiva { color: var(--ok-testo); border-color: #9fd2ae; background: var(--ok-sfondo); }
+.documento-scaduto { color: var(--errore-testo); border-color: #eba7a7; background: var(--errore-sfondo); }
 .stato-scartata { color: var(--errore-testo); border-color: #eba7a7; background: var(--errore-sfondo); }
 
 .riquadri { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
@@ -154,6 +160,7 @@ pre.dichiarazione { font-family: inherit; font-size: 0.95rem; }
 .fea { border-top: 1px solid var(--bordo); margin-top: 0.75rem; padding-top: 0.25rem; }
 .caricamento { margin-top: 1rem; display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; }
 .caricamento .campo { margin: 0; flex: 1; min-width: 260px; }
+.caricamento + * { margin-top: 1rem; }
 .qr { background: #fff; padding: 0.75rem; border-radius: var(--raggio); width: fit-content; margin: 0 auto 0.75rem; }
 .qr svg { display: block; width: 220px; height: 220px; }
 .segreto { word-break: break-all; }

@@ -22,6 +22,7 @@ from app.models import (
     VoceRegistro,
 )
 from app.routers import deleghe as api
+from app.routers import documenti_identita as api_documenti
 from app.routers import forniture as api_forniture
 from app.routers.clienti import get_cliente
 from app.routers.fea import adesione_attiva
@@ -185,6 +186,14 @@ def nuova(
             "numero": adesione.documento_numero,
             "rilasciato_da": adesione.documento_rilasciato_da,
             "scadenza": adesione.documento_scadenza.isoformat(),
+        }
+    # Altrimenti l'ultimo documento d'identita' archiviato e ancora valido
+    elif (doc := api_documenti.documento_valido(db, cliente)) and doc.tipo:
+        dati["documento"] = {
+            "tipo": doc.tipo.value,
+            "numero": doc.numero,
+            "rilasciato_da": doc.rilasciato_da,
+            "scadenza": doc.scadenza.isoformat(),
         }
     return pagina(request, "delega_nuova.html", contesto, user=user)
 

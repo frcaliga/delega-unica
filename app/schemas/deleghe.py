@@ -23,6 +23,9 @@ class ClienteBase(BaseModel):
     partita_iva_attiva: bool = False
     email: EmailStr | None = None
     telefono: str | None = Field(None, max_length=30)
+    data_nascita: date | None = None
+    sesso: Literal["M", "F"] | None = None
+    luogo_nascita: str | None = Field(None, max_length=100)
 
 
 class ClienteIn(ClienteBase):

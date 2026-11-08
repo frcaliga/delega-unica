@@ -2,7 +2,17 @@ from fastapi import FastAPI
 
 from app import web
 from app.config import get_settings
-from app.routers import auth, clienti, deleghe, fea, forniture, registro, tenant, users
+from app.routers import (
+    auth,
+    clienti,
+    deleghe,
+    documenti_identita,
+    fea,
+    forniture,
+    registro,
+    tenant,
+    users,
+)
 
 
 def create_app() -> FastAPI:
@@ -15,6 +25,7 @@ def create_app() -> FastAPI:
     app.include_router(registro.router)
     app.include_router(forniture.router)
     app.include_router(fea.router)
+    app.include_router(documenti_identita.router)
     web.installa(app)
 
     @app.get("/health", tags=["health"])

@@ -1,0 +1,11 @@
+{# Esito della lettura automatica del documento: `proposta` (PropostaOut) #}
+{% if proposta %}
+{% set avvisi = avvisi_lettura(proposta) %}
+{% if proposta.letta and not avvisi %}
+<div class="avviso ok" role="status"><p>{{ (proposta.riconosciuto or "documento")|capitalize }}: dati letti e verificati con i controlli del documento. Controllarli comunque sull'originale.</p></div>
+{% elif avvisi %}
+<div class="avviso attenzione" role="alert">
+  {% if avvisi|length == 1 %}<p>{{ avvisi[0] }}</p>{% else %}<ul>{% for a in avvisi %}<li>{{ a }}</li>{% endfor %}</ul>{% endif %}
+</div>
+{% endif %}
+{% endif %}

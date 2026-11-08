@@ -37,7 +37,10 @@ def _clean_db() -> Iterator[None]:
     yield
     with engine.begin() as conn:
         conn.execute(
-            text("TRUNCATE registro_deleghe, deleghe, clienti, audit_log, users, tenants CASCADE")
+            text(
+                "TRUNCATE registro_deleghe, documenti_identita, deleghe, clienti, audit_log, "
+                "users, tenants CASCADE"
+            )
         )
 
 

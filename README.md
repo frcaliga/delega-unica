@@ -32,6 +32,36 @@ in AWS KMS (`--kms-key-id`, poi `FEA_CA_KMS_KEY_ID` e `FEA_CA_CERT_PEM`). L'invi
 sceglie con `SMS_PROVIDER`: `console` scrive il codice nel log, `sns` usa AWS SNS. Il testo delle
 condizioni del servizio (`app/services/fea.py`) va validato da un legale prima dell'uso.
 
+## Documenti d'identita' dei clienti
+
+Per le persone fisiche lo studio archivia la copia della carta d'identita' o del passaporto e la
+piattaforma ne legge i dati per compilare l'anagrafica (`app/routers/documenti_identita.py`,
+pagine nella scheda del cliente e in "Nuovo cliente").
+
+- Lettura tutta in locale con Tesseract e OpenCV. Il motore (`app/services/ocr_documenti.py`) e'
+  ripreso dal progetto ocr di Francesco e riconosce CIE (fronte e retro), carta d'identita'
+  cartacea, passaporto e tessera sanitaria, anche da foto fatte col telefono: ritaglia e raddrizza
+  la carta, legge piu' varianti dell'immagine e sceglie per voto tra i candidati validi (cifre di
+  controllo MRZ, carattere di controllo del codice fiscale, Luhn per la tessera). Fronte e retro
+  si caricano come un PDF o come due foto, che diventano un PDF. `app/services/lettura_documenti.py`
+  traduce l'esito in dati tipizzati e segnala cosa non e' verificato da una cifra di controllo.
+- I dati letti (anche luogo di nascita e comune di rilascio dal fronte della CIE) si confrontano
+  col codice fiscale del cliente e restano una proposta: l'operatore li conferma sull'originale.
+  La patente non e' riconosciuta: si archivia e si compila a mano. Con l'elenco ISTAT dei comuni
+  incluso in `app/dati/comuni.csv` (o un altro indicato da `COMUNI_CSV_PATH`) i nomi dei comuni
+  letti male vengono corretti; si aggiorna riscaricando `Elenco-comuni-italiani.csv` dall'ISTAT. `POST /documenti-identita/lettura`
+  legge senza salvare.
+- Le copie sono cifrate nell'applicazione con AES-256-GCM, una chiave dati per copia legata a
+  studio e documento (`app/services/cifratura.py`). In produzione la chiave principale e' in AWS
+  KMS (`DOCUMENTI_KMS_KEY_ID`); altrove si usa `DOCUMENTI_CHIAVE` (32 byte in base64) o, in
+  sviluppo, una chiave derivata da `SECRET_KEY`. Passando a KMS le copie gia' salvate restano
+  leggibili finche' la chiave locale resta configurata. Nel database l'esito della lettura si
+  conserva senza dati personali; ogni apertura, caricamento e cancellazione va nell'audit log.
+- Conservazione: le copie dell'archivio si cancellano dalla scheda o con
+  `uv run python -m app.cli elimina-documenti-scaduti --mesi 12`. All'adesione FEA si puo'
+  riusare la copia archiviata: diventa evidenza dell'adesione e da li' si conserva vent'anni,
+  indipendentemente dall'archivio.
+
 ## Produzione
 
 Infrastruttura Terraform per AWS Milano e guida al primo deploy in

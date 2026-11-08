@@ -23,6 +23,11 @@ dependencies = [
     "boto3>=1.43.118",
     "jinja2>=3.1.6",
     "qrcode>=8.2",
+    "pillow>=13.0.0",
+    "pypdfium2>=5.15.1",
+    "pytesseract>=0.3.13",
+    "opencv-python-headless>=5.0.0.93",
+    "numpy>=2.5.4",
 ]
 
 [dependency-groups]
@@ -45,7 +50,9 @@ ignore = ["B008"]
 
 [tool.ruff.lint.per-file-ignores]
 "migrations/versions/*" = ["E501"]
-"tests/*" = ["F811"]  # fixture pytest importate e riusate come parametri
+"tests/*" = ["F811"]
+# Motore OCR ripreso dal progetto ocr: stile originale mantenuto per confrontarlo facilmente
+"app/services/ocr_documenti.py" = ["E731", "E741", "B905"]  # fixture pytest importate e riusate come parametri
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
