@@ -23,6 +23,8 @@ class Cliente(IdMixin, TimestampMixin, TenantScopedMixin, Base):
     # Persona fisica: letti dal documento d'identita' o inseriti a mano
     data_nascita: Mapped[date | None] = mapped_column(Date)
     sesso: Mapped[str | None] = mapped_column(String(1))
+    # Comune (e provincia) o Stato estero di nascita
+    luogo_nascita: Mapped[str | None] = mapped_column(String(100))
 
     @property
     def persona_fisica(self) -> bool:

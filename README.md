@@ -38,13 +38,18 @@ Per le persone fisiche lo studio archivia la copia della carta d'identita' o del
 piattaforma ne legge i dati per compilare l'anagrafica (`app/routers/documenti_identita.py`,
 pagine nella scheda del cliente e in "Nuovo cliente").
 
-- Lettura tutta in locale con Tesseract (`app/services/lettura_documenti.py`): dalla zona a
-  lettura ottica (MRZ) del retro della CIE o del passaporto si ricavano cognome, nome, data di
-  nascita, sesso, numero e scadenza. Numero e date si accettano solo se tornano le cifre di
-  controllo ICAO; sul testo stampato si cerca anche il codice fiscale (carattere di controllo
-  verificato). I dati letti si confrontano col codice fiscale del cliente e restano una proposta:
-  l'operatore li conferma sul documento originale. Le vecchie carte cartacee e la patente non hanno
-  MRZ: si archiviano e si compilano a mano. `POST /documenti-identita/lettura` legge senza salvare.
+- Lettura tutta in locale con Tesseract e OpenCV. Il motore (`app/services/ocr_documenti.py`) e'
+  ripreso dal progetto ocr di Francesco e riconosce CIE (fronte e retro), carta d'identita'
+  cartacea, passaporto e tessera sanitaria, anche da foto fatte col telefono: ritaglia e raddrizza
+  la carta, legge piu' varianti dell'immagine e sceglie per voto tra i candidati validi (cifre di
+  controllo MRZ, carattere di controllo del codice fiscale, Luhn per la tessera). Fronte e retro
+  si caricano come un PDF o come due foto, che diventano un PDF. `app/services/lettura_documenti.py`
+  traduce l'esito in dati tipizzati e segnala cosa non e' verificato da una cifra di controllo.
+- I dati letti (anche luogo di nascita e comune di rilascio dal fronte della CIE) si confrontano
+  col codice fiscale del cliente e restano una proposta: l'operatore li conferma sull'originale.
+  La patente non e' riconosciuta: si archivia e si compila a mano. Con `COMUNI_CSV_PATH` (elenco
+  ISTAT dei comuni) i nomi dei comuni letti male vengono corretti. `POST /documenti-identita/lettura`
+  legge senza salvare.
 - Le copie sono cifrate nell'applicazione con AES-256-GCM, una chiave dati per copia legata a
   studio e documento (`app/services/cifratura.py`). In produzione la chiave principale e' in AWS
   KMS (`DOCUMENTI_KMS_KEY_ID`); altrove si usa `DOCUMENTI_CHIAVE` (32 byte in base64) o, in

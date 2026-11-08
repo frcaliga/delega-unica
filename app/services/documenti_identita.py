@@ -1,6 +1,7 @@
 """Archivio dei documenti d'identita': controllo della copia, lettura, cifratura e proposta."""
 
 import hashlib
+import io
 import uuid
 from dataclasses import dataclass
 from datetime import date
@@ -44,32 +45,65 @@ def controlla_copia(dati: bytes, tipo: str | None, nome: str | None) -> tuple[Co
     return Copia(dati, tipo, nome), ""
 
 
+MAX_FILE = 2
+
+
+def unisci(copie: list[Copia]) -> tuple[Copia | None, str]:
+    """Fronte e retro fotografati a parte diventano un unico PDF, una pagina per lato."""
+    if len(copie) == 1:
+        return copie[0], ""
+    if len(copie) > MAX_FILE:
+        return None, "Al massimo due file: fronte e retro"
+    if any(c.tipo == "application/pdf" for c in copie):
+        return None, "Un PDF va caricato da solo: deve gia' contenere fronte e retro"
+    from PIL import Image, ImageOps
+
+    try:
+        pagine = [
+            ImageOps.exif_transpose(Image.open(io.BytesIO(c.dati))).convert("RGB") for c in copie
+        ]
+    except Exception:
+        return None, "Immagine illeggibile"
+    buf = io.BytesIO()
+    pagine[0].save(buf, "PDF", save_all=True, append_images=pagine[1:], resolution=300)
+    nome = copie[0].nome.rsplit(".", 1)[0][:140] + ".pdf"
+    unita = Copia(buf.getvalue(), "application/pdf", nome)
+    if len(unita.dati) > MAX_COPIA:
+        return None, "Fronte e retro insieme superano 10 MB"
+    return unita, ""
+
+
 def proposta(copia: Copia, oggi: date, cf_cliente: str | None = None) -> PropostaOut:
     try:
         esito = lettura_documenti.leggi(copia.dati, copia.tipo, oggi)
     except lettura_documenti.LetturaNonDisponibile:
         return PropostaOut(letta=False, avvisi=["Lettura automatica non disponibile"])
-    p = PropostaOut(letta=esito.trovata, avvisi=list(esito.avvisi))
-    p.codice_fiscale = esito.codice_fiscale
-    if m := esito.mrz:
-        incerti = set(m.errori)
-        p.campi_incerti = sorted(incerti)
-        p.tipo = TipoDocumento.CARTA_IDENTITA if m.carta_identita else TipoDocumento.PASSAPORTO
-        if "numero_documento" not in incerti and "composito" not in incerti:
-            p.numero = m.numero_documento or None
-        if "data_scadenza" not in incerti:
-            p.scadenza = m.data_scadenza
-        if "data_nascita" not in incerti:
-            p.data_nascita = m.data_nascita
-        p.cognome = m.cognome.title() or None
-        p.nome = m.nome.title() or None
-        p.sesso = m.sesso  # type: ignore[assignment]
-        if p.scadenza and p.scadenza < oggi:
-            p.avvisi.append("Il documento e' scaduto")
-    cf = cf_cliente or p.codice_fiscale
-    if cf and p.codice_fiscale and cf_cliente and p.codice_fiscale != cf_cliente:
+    p = PropostaOut(
+        letta=esito.trovata,
+        riconosciuto=lettura_documenti.NOMI.get(esito.riconosciuto or ""),
+        tipo=esito.tipo,
+        numero=esito.numero,
+        scadenza=esito.scadenza,
+        rilasciato_da=esito.rilasciato_da,
+        cognome=esito.cognome,
+        nome=esito.nome,
+        data_nascita=esito.data_nascita,
+        sesso=esito.sesso,  # type: ignore[arg-type]
+        luogo_nascita=esito.luogo_nascita,
+        provincia_nascita=esito.provincia_nascita,
+        codice_fiscale=esito.codice_fiscale,
+        avvisi=list(esito.avvisi),
+    )
+    if not esito.mrz_verificata:
+        # Letti dal testo stampato: nessuna cifra di controllo a confermarli
+        letti = {"numero_documento": p.numero, "data_nascita": p.data_nascita}
+        letti["data_scadenza"] = p.scadenza
+        p.campi_incerti = [k for k, v in letti.items() if v]
+    if p.scadenza and p.scadenza < oggi:
+        p.avvisi.append("Il documento e' scaduto")
+    if p.codice_fiscale and cf_cliente and p.codice_fiscale != cf_cliente:
         p.discordanze.append("codice fiscale")
-    if cf:
+    if cf := cf_cliente or p.codice_fiscale:
         p.discordanze += codice_fiscale.discordanze(
             cf, cognome=p.cognome, nome=p.nome, data_nascita=p.data_nascita, sesso=p.sesso
         )
@@ -80,6 +114,7 @@ def riepilogo(p: PropostaOut) -> dict:
     """Esito della lettura da conservare: niente dati personali."""
     return {
         "letta": p.letta,
+        "documento": p.riconosciuto,
         "campi_incerti": p.campi_incerti,
         "discordanze": p.discordanze,
         "codice_fiscale_trovato": p.codice_fiscale is not None,

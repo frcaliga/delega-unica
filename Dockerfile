@@ -9,7 +9,7 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PATH="/app/.venv/bin:$PATH"
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev && .venv/bin/python -c "import cv2, numpy, pytesseract"
 
 COPY . .
 RUN useradd --system --uid 10001 app

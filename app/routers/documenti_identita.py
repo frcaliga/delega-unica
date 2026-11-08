@@ -35,12 +35,21 @@ def get_documento(db: Session, user: User, documento_id: uuid.UUID) -> Documento
     return doc
 
 
-async def leggi_upload(upload: UploadFile) -> servizio.Copia:
-    dati = await upload.read(servizio.MAX_COPIA + 1)
-    copia, errore = servizio.controlla_copia(dati, upload.content_type, upload.filename)
-    if copia is None:
+async def leggi_upload(uploads: list[UploadFile]) -> servizio.Copia:
+    """Uno o due file (fronte e retro), controllati e uniti in un'unica copia."""
+    copie = []
+    for upload in uploads:
+        dati = await upload.read(servizio.MAX_COPIA + 1)
+        copia, errore = servizio.controlla_copia(dati, upload.content_type, upload.filename)
+        if copia is None:
+            raise _errori([errore])
+        copie.append(copia)
+    if not copie:
+        raise _errori(["Allegare la copia del documento"])
+    unita, errore = servizio.unisci(copie)
+    if unita is None:
         raise _errori([errore])
-    return copia
+    return unita
 
 
 def solo_persone_fisiche(cliente: Cliente) -> None:
@@ -55,11 +64,14 @@ async def leggi_proposta(copia: servizio.Copia, cf: str | None) -> PropostaOut:
 
 @router.post("/documenti-identita/lettura", response_model=PropostaOut)
 async def leggi(
-    copia: UploadFile,
+    copia: list[UploadFile],
     codice_fiscale: str | None = Form(None),
     user: User = Depends(get_current_user),
 ) -> PropostaOut:
-    """Legge i dati dalla copia senza salvarla, per precompilare l'anagrafica."""
+    """Legge i dati dalla copia senza salvarla, per precompilare l'anagrafica.
+
+    `copia` accetta un file (PDF o immagine) o due immagini: fronte e retro.
+    """
     return await leggi_proposta(await leggi_upload(copia), (codice_fiscale or "").upper() or None)
 
 
@@ -109,7 +121,7 @@ def salva(
 async def carica(
     cliente_id: uuid.UUID,
     request: Request,
-    copia: UploadFile,
+    copia: list[UploadFile],
     tipo: TipoDocumento | None = Form(None),
     numero: str | None = Form(None, max_length=30),
     rilasciato_da: str | None = Form(None, max_length=100),
@@ -133,7 +145,7 @@ async def carica(
         portachiavi,
         tipo=tipo or proposta.tipo or TipoDocumento.CARTA_IDENTITA,
         numero=numero or proposta.numero,
-        rilasciato_da=rilasciato_da,
+        rilasciato_da=rilasciato_da or proposta.rilasciato_da,
         scadenza=scadenza or proposta.scadenza,
     )
     db.commit()

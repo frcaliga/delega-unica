@@ -25,6 +25,7 @@ class ClienteBase(BaseModel):
     telefono: str | None = Field(None, max_length=30)
     data_nascita: date | None = None
     sesso: Literal["M", "F"] | None = None
+    luogo_nascita: str | None = Field(None, max_length=100)
 
 
 class ClienteIn(ClienteBase):

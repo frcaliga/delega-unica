@@ -15,6 +15,7 @@ from app.routers import clienti as api_clienti
 from app.routers import documenti_identita as api
 from app.schemas.deleghe import ClienteIn, ClienteUpdate
 from app.schemas.documenti_identita import PropostaOut
+from app.services import documenti_identita as servizio
 from app.services.cifratura import Portachiavi, get_portachiavi
 from app.web import clienti as web_clienti
 from app.web.base import errori_da, pagina, vai, vuoto_a_none
@@ -28,23 +29,33 @@ def dati_da_proposta(p: PropostaOut) -> dict:
         "documento_tipo": p.tipo.value if p.tipo else TipoDocumento.CARTA_IDENTITA.value,
         "documento_numero": p.numero,
         "documento_scadenza": p.scadenza.isoformat() if p.scadenza else None,
+        "documento_rilasciato_da": p.rilasciato_da,
         "cognome": p.cognome,
         "nome": p.nome,
         "data_nascita": p.data_nascita.isoformat() if p.data_nascita else None,
         "sesso": p.sesso,
+        "luogo_nascita": luogo_nascita(p),
         "codice_fiscale": p.codice_fiscale,
     }
 
 
-def _file(upload: UploadFile | None) -> UploadFile | None:
-    return upload if upload is not None and upload.filename else None
+def luogo_nascita(p: PropostaOut) -> str | None:
+    if p.luogo_nascita and p.provincia_nascita:
+        return f"{p.luogo_nascita} ({p.provincia_nascita})"
+    return p.luogo_nascita
 
 
-async def _proposta(upload: UploadFile | None, cf: str | None) -> tuple[PropostaOut | None, list]:
-    if (upload := _file(upload)) is None:
+def _file(uploads: list[UploadFile] | None) -> list[UploadFile]:
+    return [u for u in uploads or [] if u.filename]
+
+
+async def _proposta(
+    uploads: list[UploadFile] | None, cf: str | None
+) -> tuple[PropostaOut | None, list]:
+    if not (scelti := _file(uploads)):
         return None, ["Scegliere il file con la copia del documento"]
     try:
-        copia = await api.leggi_upload(upload)
+        copia = await api.leggi_upload(scelti)
     except HTTPException as exc:
         return None, errori_da(exc)
     return await api.leggi_proposta(copia, cf), []
@@ -77,11 +88,10 @@ async def _archivia(
     db: Session,
     user: User,
     cliente: Cliente,
-    upload: UploadFile,
+    copia: servizio.Copia,
     estremi: dict,
     portachiavi: Portachiavi,
 ) -> DocumentoIdentita:
-    copia = await api.leggi_upload(upload)
     proposta = await api.leggi_proposta(copia, cliente.codice_fiscale)
     return api.salva(
         db,
@@ -109,7 +119,7 @@ async def _archivia(
 async def leggi(
     request: Request,
     cliente_id: uuid.UUID,
-    copia: UploadFile | None = None,
+    copia: list[UploadFile] | None = None,
     user: User = Depends(utente_web),
     db: Session = Depends(get_db),
 ) -> Response:
@@ -129,7 +139,7 @@ async def leggi(
 async def archivia(
     request: Request,
     cliente_id: uuid.UUID,
-    copia: UploadFile | None = None,
+    copia: list[UploadFile] | None = None,
     user: User = Depends(utente_web),
     db: Session = Depends(get_db),
     portachiavi: Portachiavi = Depends(get_portachiavi),
@@ -143,15 +153,17 @@ async def archivia(
         "nome": vuoto_a_none(form.get("nome")),
         "data_nascita": vuoto_a_none(form.get("data_nascita")),
         "sesso": vuoto_a_none(form.get("sesso")),
+        "luogo_nascita": vuoto_a_none(form.get("luogo_nascita")),
     }
-    if (upload := _file(copia)) is None:
+    if not (scelti := _file(copia)):
         errori.append("Scegliere il file con la copia del documento")
     if not errori:
         try:
             api.solo_persone_fisiche(cliente)
             modifiche = {k: v for k, v in anagrafica.items() if v} if aggiorna else {}
             update = ClienteUpdate(**modifiche) if modifiche else None
-            await _archivia(request, db, user, cliente, upload, estremi, portachiavi)
+            file = await api.leggi_upload(scelti)
+            await _archivia(request, db, user, cliente, file, estremi, portachiavi)
             if update is not None:
                 api_clienti.update_cliente(cliente.id, update, request=request, user=user, db=db)
             db.commit()
@@ -205,7 +217,7 @@ def elimina(
 @router.post("/clienti/nuovo/leggi", response_class=HTMLResponse)
 async def leggi_nuovo(
     request: Request,
-    copia: UploadFile | None = None,
+    copia: list[UploadFile] | None = None,
     user: User = Depends(utente_web),
 ) -> Response:
     form = await request.form()
@@ -228,25 +240,25 @@ async def crea_con_documento(
     db: Session,
     user: User,
     form,
-    copia: UploadFile | None,
+    copia: list[UploadFile] | None,
     portachiavi: Portachiavi,
 ) -> tuple[Cliente | None, dict, list[str]]:
     """Crea il cliente e, se e' stata scelta una copia, ne archivia il documento."""
     dati = web_clienti.dati_modulo(form)
     estremi, errori = _estremi(form)
-    upload = _file(copia)
-    if errori and upload:
+    scelti = _file(copia)
+    if errori and scelti:
         return None, {**dati, **estremi}, errori
     try:
         body = ClienteIn(**dati)
-        if upload:
+        file = None
+        if scelti:
             # Il file e il tipo di soggetto si controllano prima di creare il cliente
-            await api.leggi_upload(upload)
-            await upload.seek(0)
+            file = await api.leggi_upload(scelti)
             api.solo_persone_fisiche(Cliente(codice_fiscale=body.codice_fiscale))
         cliente = api_clienti.create_cliente(body, request=request, user=user, db=db)
-        if upload:
-            await _archivia(request, db, user, cliente, upload, estremi, portachiavi)
+        if file is not None:
+            await _archivia(request, db, user, cliente, file, estremi, portachiavi)
             db.commit()
     except (ValidationError, HTTPException) as exc:
         db.rollback()

@@ -9,9 +9,9 @@
   <form method="post" action="/studio/clienti/nuovo" enctype="multipart/form-data">
     {{ m.csrf() }}
     <div class="caricamento">
-      <label class="campo"><span>Carta d'identita' o passaporto (facoltativo)</span>
-        <input type="file" name="copia" accept="application/pdf,image/jpeg,image/png">
-        <small>Persone fisiche: foto o scansione del retro della CIE o della pagina dati del passaporto. PDF, JPEG o PNG, fino a 10 MB. La copia viene conservata cifrata.</small></label>
+      <label class="campo"><span>Documento d'identita' (facoltativo)</span>
+        <input type="file" name="copia" accept="application/pdf,image/jpeg,image/png" multiple>
+        <small>Persone fisiche: un PDF con fronte e retro, oppure due foto anche dal telefono. CIE, carta cartacea, passaporto o tessera sanitaria, fino a 10 MB. La copia viene conservata cifrata.</small></label>
       <button type="button" class="secondario" hx-post="/studio/clienti/nuovo/leggi" hx-encoding="multipart/form-data" hx-include="closest form" hx-target="#campi-nuovo-cliente" hx-swap="outerHTML">Leggi i dati dal documento</button>
     </div>
     {% include "_nuovo_cliente_campi.html" %}

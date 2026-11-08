@@ -64,12 +64,11 @@ STATI_ADESIONE = {
     StatoAdesione.REVOCATA: "Revocata",
 }
 SESSI = {"M": "Maschile", "F": "Femminile"}
-# Campi della zona a lettura ottica con la cifra di controllo errata
+# Campi letti senza cifre di controllo a confermarli
 CAMPI_MRZ = {
     "numero_documento": "numero del documento",
     "data_nascita": "data di nascita",
     "data_scadenza": "data di scadenza",
-    "composito": "controllo complessivo",
 }
 RUOLI = {
     Role.ADMIN: "Amministratore",
@@ -99,7 +98,7 @@ def avvisi_lettura(proposta) -> list[str]:
     avvisi = list(proposta.avvisi)
     if proposta.campi_incerti:
         campi = ", ".join(CAMPI_MRZ.get(c, c) for c in proposta.campi_incerti)
-        avvisi.append(f"Cifre di controllo errate per: {campi}. Compilare questi campi a mano.")
+        avvisi.append(f"Letti senza cifre di controllo: {campi}. Controllarli sul documento.")
     if proposta.discordanze:
         avvisi.append(
             f"Non tornano con il codice fiscale: {', '.join(proposta.discordanze)}. "

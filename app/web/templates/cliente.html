@@ -72,8 +72,8 @@
       {{ m.csrf() }}
       <div class="caricamento">
         <label class="campo"><span>Copia del documento <abbr title="obbligatorio">*</abbr></span>
-          <input type="file" name="copia" accept="application/pdf,image/jpeg,image/png" required>
-          <small>Retro della CIE o pagina dati del passaporto per la lettura automatica. PDF, JPEG o PNG, fino a 10 MB.</small></label>
+          <input type="file" name="copia" accept="application/pdf,image/jpeg,image/png" multiple required>
+          <small>CIE, carta cartacea, passaporto o tessera sanitaria: un PDF con fronte e retro, oppure due foto (fronte e retro). Fino a 10 MB.</small></label>
         <button type="button" class="secondario" hx-post="/studio/clienti/{{ cliente.id }}/documenti/leggi" hx-encoding="multipart/form-data" hx-include="closest form" hx-target="#campi-documento" hx-swap="outerHTML">Leggi i dati</button>
       </div>
       {% set errori = none %}{% set proposta = none %}

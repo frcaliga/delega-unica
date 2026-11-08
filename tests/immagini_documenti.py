@@ -5,7 +5,7 @@ from datetime import date
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-from app.domain.mrz import cifra_controllo
+from app.services.ocr_documenti import mrz_check as cifra_controllo
 
 FONT_MONO = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
 
@@ -20,7 +20,7 @@ def righe_cie(
 ) -> list[str]:
     n = f"{nascita:%y%m%d}"
     s = f"{scadenza:%y%m%d}"
-    r1 = ("CI" + "ITA" + numero + cifra_controllo(numero)).ljust(30, "<")
+    r1 = ("C<" + "ITA" + numero + cifra_controllo(numero)).ljust(30, "<")
     r2 = n + cifra_controllo(n) + sesso + s + cifra_controllo(s) + "ITA" + "<" * 11
     composito = r1[5:30] + r2[0:7] + r2[8:15] + r2[18:29]
     r2 += cifra_controllo(composito)
@@ -40,6 +40,7 @@ def retro_cie(righe: list[str], codice_fiscale: str | None = None, formato: str 
     disegno = ImageDraw.Draw(img)
     testo = _font(26)
     disegno.text((40, 40), "REPUBBLICA ITALIANA", font=testo, fill=(40, 40, 40))
+    disegno.text((520, 40), "CARTA DI IDENTITA", font=testo, fill=(40, 40, 40))
     if codice_fiscale:
         disegno.text((40, 110), "CODICE FISCALE / FISCAL CODE", font=_font(20), fill=(70, 70, 70))
         disegno.text((40, 140), codice_fiscale, font=testo, fill=(20, 20, 20))

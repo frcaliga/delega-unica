@@ -30,8 +30,9 @@ CAMPI = (
     "telefono",
     "data_nascita",
     "sesso",
+    "luogo_nascita",
 )
-CAMPI_PERSONA_FISICA = ("cognome", "nome", "data_nascita", "sesso")
+CAMPI_PERSONA_FISICA = ("cognome", "nome", "data_nascita", "sesso", "luogo_nascita")
 
 
 def dati_modulo(form) -> dict:
@@ -62,7 +63,7 @@ def nuovo(request: Request, user: User = Depends(utente_web)) -> Response:
 @router.post("/clienti/nuovo", response_class=HTMLResponse)
 async def crea(
     request: Request,
-    copia: UploadFile | None = None,
+    copia: list[UploadFile] | None = None,
     user: User = Depends(utente_web),
     db: Session = Depends(get_db),
     portachiavi: Portachiavi = Depends(get_portachiavi),

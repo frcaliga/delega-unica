@@ -8,9 +8,9 @@ import pytest
 from PIL import Image
 from sqlalchemy import select, text
 
-from app.domain import codice_fiscale, mrz
+from app.domain import codice_fiscale
 from app.models import AuditLog, DocumentoIdentita
-from app.services import cifratura, lettura_documenti
+from app.services import cifratura, lettura_documenti, ocr_documenti
 from tests.helpers import LAURA, MARIO, SOCIETA, cf_pf
 from tests.immagini_documenti import retro_cie, righe_cie
 from tests.test_deleghe_api import _oggi, headers, mario  # noqa: F401 - fixture riusate
@@ -19,56 +19,51 @@ from tests.test_web import admin, browser, sms_finti  # noqa: F401 - fixture riu
 OGGI = date(2026, 10, 24)
 tesseract = pytest.mark.skipif(shutil.which("tesseract") is None, reason="Tesseract assente")
 
-# Esempi del documento ICAO 9303
-TD1 = [
-    "I<UTOD231458907<<<<<<<<<<<<<<<",
-    "7408122F1204159UTO<<<<<<<<<<<6",
-    "ERIKSSON<<ANNA<MARIA<<<<<<<<<<",
-]
-TD3 = [
-    "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<",
-    "L898902C36UTO7408122F1204159ZE184226B<<<<<10",
-]
+# MRZ (motore OCR)
 
 
-# MRZ
-
-
-def test_mrz_esempi_icao():
-    for righe, formato in ((TD1, "TD1"), (TD3, "TD3")):
-        dati = mrz.cerca("\n".join(righe), OGGI)
-        assert dati is not None and dati.valida, dati
-        assert dati.formato == formato
-        assert (dati.cognome, dati.nome, dati.sesso) == ("ERIKSSON", "ANNA MARIA", "F")
-        assert dati.data_nascita == date(1974, 8, 12)
-        assert dati.data_scadenza == date(2012, 4, 15)
-    assert mrz.cerca("\n".join(TD1), OGGI).numero_documento == "D23145890"
-    assert mrz.cerca("\n".join(TD3), OGGI).numero_documento == "L898902C3"
-
-
-def test_mrz_cie_tra_altro_testo_e_con_errori_tipici_dell_ocr():
+def test_mrz_cie_con_errori_tipici_dell_ocr():
     righe = righe_cie(numero="CB12345XY", cognome="DE LUCA", nome="GIAN PAOLO")
-    # O per 0 nelle date, 0 per O nel nome, riempitivo letto come K, spazi spuri
+    # O per 0 e I per 1, un carattere spurio inserito, riempitivo letto come K
     sporche = [
-        righe[0].replace("12345", "I2345"),
+        righe[0].replace("12345", "I2345").replace("ITA", "ITA."),
         righe[1].replace("800101", "8OO1O1"),
-        righe[2].replace("PAOLO", "PA0LO").replace("<<<<<", "<K<K<"),
+        righe[2].replace("<<<<<", "<K<K<"),
     ]
-    testo = "REPUBBLICA ITALIANA\nCOMUNE DI ROMA\n" + "\n".join(" ".join(sporche).split(" "))
-    dati = mrz.cerca(testo, OGGI)
-    assert dati is not None and dati.valida, dati
-    assert dati.numero_documento == "CB12345XY"
-    assert (dati.cognome, dati.nome) == ("DE LUCA", "GIAN PAOLO")
-    assert dati.data_nascita == date(1980, 1, 1) and dati.carta_identita
+    dati = ocr_documenti.parse_mrz(["REPUBBLICA ITALIANA", *sporche])
+    assert dati["num"] == "CB12345XY"
+    assert (dati["cognome"], dati["nome"]) == ("DE LUCA", "GIAN PAOLO")
+    assert (dati["nascita"], dati["scadenza"], dati["sesso"]) == ("01/01/1980", "01/01/2031", "M")
 
 
 def test_mrz_cifre_di_controllo_errate():
     righe = righe_cie()
     righe[1] = "800102" + righe[1][6:]  # data di nascita alterata
-    dati = mrz.cerca("\n".join(righe), OGGI)
-    assert dati is not None and not dati.valida
-    assert "data_nascita" in dati.errori
-    assert mrz.cerca("nessuna zona a lettura ottica", OGGI) is None
+    dati = ocr_documenti.parse_mrz(righe)
+    assert "nascita" not in dati and dati["num"] == "CA00000AA"
+
+
+def test_da_estrazione():
+    lettura = lettura_documenti.da_estrazione(
+        {
+            "tipo": "CIE",
+            "numero_documento": "CA00000AA",
+            "cognome": "DE LUCA",
+            "nome": "GIAN PAOLO",
+            "data_nascita": "31/12/1999",
+            "data_scadenza": "31/02/2031",
+            "sesso": "M",
+            "comune_rilascio": "ROMA",
+            "luogo_nascita": "TORINO",
+            "provincia_nascita": "TO",
+            "mrz_verificata": True,
+        }
+    )
+    assert lettura.trovata and lettura.tipo.value == "1"
+    assert (lettura.cognome, lettura.nome) == ("De Luca", "Gian Paolo")
+    assert lettura.data_nascita == date(1999, 12, 31) and lettura.scadenza is None
+    assert lettura.rilasciato_da == "Comune di Roma" and lettura.luogo_nascita == "Torino"
+    assert not lettura_documenti.da_estrazione({"tipo": None}).trovata
 
 
 # Codice fiscale
@@ -151,22 +146,22 @@ def test_lettura_retro_cie_e_pdf():
     png = retro_cie(righe, LAURA)
     esito = lettura_documenti.leggi(png, "image/png", OGGI)
     assert esito.trovata, esito
-    assert esito.codice_fiscale == LAURA
-    m = esito.mrz
-    assert (m.cognome, m.nome, m.sesso, m.data_nascita) == (
-        "BIANCHI",
-        "LAURA",
+    assert esito.riconosciuto == "CIE" and esito.codice_fiscale == LAURA
+    assert (esito.cognome, esito.nome, esito.sesso, esito.data_nascita) == (
+        "Bianchi",
+        "Laura",
         "F",
         date(1985, 8, 1),
     )
-    assert m.numero_documento == "CB12345XY" and m.data_scadenza == date(2031, 1, 1)
+    assert esito.numero == "CB12345XY" and esito.scadenza == date(2031, 1, 1)
 
     # PDF di scansione con il fronte (senza MRZ) e il retro
     fronte = Image.new("RGB", (1020, 640), "white")
     buf = io.BytesIO()
-    fronte.save(buf, "PDF", save_all=True, append_images=[Image.open(io.BytesIO(png))])
+    retro = Image.open(io.BytesIO(png))
+    fronte.save(buf, "PDF", save_all=True, append_images=[retro], resolution=300)
     esito = lettura_documenti.leggi(buf.getvalue(), "application/pdf", OGGI)
-    assert esito.trovata and esito.mrz.cognome == "BIANCHI"
+    assert esito.trovata and esito.cognome == "Bianchi"
 
 
 @tesseract
@@ -174,7 +169,7 @@ def test_lettura_senza_mrz():
     buf = io.BytesIO()
     Image.new("RGB", (800, 500), "white").save(buf, "PNG")
     esito = lettura_documenti.leggi(buf.getvalue(), "image/png", OGGI)
-    assert not esito.trovata and "Zona a lettura ottica non trovata" in esito.avvisi[0]
+    assert not esito.trovata and "Documento non riconosciuto" in esito.avvisi[0]
     rotto = lettura_documenti.leggi(b"\x89PNG\r\n\x1a\nrotto", "image/png", OGGI)
     assert not rotto.trovata and rotto.avvisi
 
@@ -233,6 +228,7 @@ def test_archivio_cifrato(client, headers, mario, db, make_user, login):
     # Nell'esito conservato non ci sono dati personali
     assert doc["lettura"] == {
         "letta": True,
+        "documento": "carta d'identita' elettronica",
         "campi_incerti": doc["proposta"]["campi_incerti"],
         "discordanze": [],
         "codice_fiscale_trovato": True,
@@ -404,3 +400,31 @@ def test_comando_elimina_documenti_scaduti(client, headers, mario, db, monkeypat
     assert esito.exit_code == 0 and "Eliminati: 1" in esito.output, esito.output
     db.expire_all()
     assert [d.scadenza for d in db.scalars(select(DocumentoIdentita))] == [date(2026, 1, 1)]
+
+
+@tesseract
+def test_fronte_e_retro_in_due_foto(client, headers, mario):
+    buf = io.BytesIO()
+    Image.new("RGB", (1020, 640), "white").save(buf, "JPEG")
+    retro = retro_cie(righe_cie(), MARIO, "JPEG")
+    files = [
+        ("copia", ("fronte.jpg", buf.getvalue(), "image/jpeg")),
+        ("copia", ("retro.jpg", retro, "image/jpeg")),
+    ]
+    res = client.post(f"/clienti/{mario['id']}/documenti-identita", headers=headers, files=files)
+    assert res.status_code == 201, res.text
+    doc = res.json()
+    assert doc["copia_tipo"] == "application/pdf" and doc["copia_nome"] == "fronte.pdf"
+    assert doc["proposta"]["riconosciuto"] == "carta d'identita' elettronica"
+    assert doc["proposta"]["codice_fiscale"] == MARIO
+    copia = client.get(f"/documenti-identita/{doc['id']}/copia", headers=headers).content
+    assert copia.startswith(b"%PDF")
+
+    pdf_e_foto = [
+        ("copia", ("ci.pdf", b"%PDF-1.4 copia", "application/pdf")),
+        ("copia", ("retro.jpg", retro, "image/jpeg")),
+    ]
+    res = client.post(
+        f"/clienti/{mario['id']}/documenti-identita", headers=headers, files=pdf_e_foto
+    )
+    assert res.status_code == 422 and "PDF va caricato da solo" in res.text

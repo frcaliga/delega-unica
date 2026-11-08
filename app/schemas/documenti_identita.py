@@ -10,16 +10,22 @@ from app.domain.regole import TipoDocumento
 class PropostaOut(BaseModel):
     """Dati letti dalla copia del documento, da controllare sull'originale."""
 
+    # Dati confermati dai controlli (MRZ, oppure codice fiscale della tessera sanitaria)
     letta: bool
-    # Campi della MRZ con la cifra di controllo errata
+    # Documento riconosciuto: carta d'identita' elettronica o cartacea, passaporto, tessera
+    riconosciuto: str | None = None
+    # Campi letti dal testo stampato, senza cifre di controllo a confermarli
     campi_incerti: list[str] = []
     tipo: TipoDocumento | None = None
     numero: str | None = None
     scadenza: date | None = None
+    rilasciato_da: str | None = None
     cognome: str | None = None
     nome: str | None = None
     data_nascita: date | None = None
     sesso: Literal["M", "F"] | None = None
+    luogo_nascita: str | None = None
+    provincia_nascita: str | None = None
     codice_fiscale: str | None = None
     # Dati che non tornano con il codice fiscale del cliente
     discordanze: list[str] = []

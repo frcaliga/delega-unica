@@ -12,6 +12,7 @@
   {{ m.campo("data_nascita", "Data di nascita", nascita, tipo="date", aiuto="Persone fisiche" if nuovo else "") }}
   {{ m.scelta("sesso", "Sesso", SESSI, dati.get("sesso", cliente.sesso if cliente else "") or "", vuota="") }}
 </div>
+{{ m.campo("luogo_nascita", "Luogo di nascita", dati.get("luogo_nascita", cliente.luogo_nascita if cliente else ""), aiuto="Comune e provincia, ad esempio Torino (TO), o Stato estero", attr='maxlength="100"') }}
 {% endif %}
 {% if nuovo or not cliente.persona_fisica %}
 {{ m.campo("denominazione", "Denominazione", dati.get("denominazione", cliente.denominazione if cliente else ""), aiuto="Societa', enti e altri soggetti diversi dalle persone fisiche" if nuovo else "") }}

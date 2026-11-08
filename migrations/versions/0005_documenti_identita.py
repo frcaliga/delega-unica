@@ -20,6 +20,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.add_column("clienti", sa.Column("data_nascita", sa.Date(), nullable=True))
     op.add_column("clienti", sa.Column("sesso", sa.String(length=1), nullable=True))
+    op.add_column("clienti", sa.Column("luogo_nascita", sa.String(length=100), nullable=True))
     op.create_table(
         "documenti_identita",
         sa.Column("cliente_id", sa.Uuid(), nullable=False),
@@ -64,5 +65,6 @@ def downgrade() -> None:
     op.drop_index("ix_documenti_identita_tenant_id", table_name="documenti_identita")
     op.drop_index("ix_documenti_identita_cliente_id", table_name="documenti_identita")
     op.drop_table("documenti_identita")
+    op.drop_column("clienti", "luogo_nascita")
     op.drop_column("clienti", "sesso")
     op.drop_column("clienti", "data_nascita")
