@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block titolo %}Errore{% endblock %}
+{% block contenuto %}
+<section class="pannello stretto">
+  <h1>{% if codice == 404 %}Non trovato{% elif codice == 403 %}Accesso negato{% else %}Operazione non riuscita{% endif %}</h1>
+  <p>{{ dettaglio }}</p>
+  <p><a class="bottone" href="/studio">Torna al cruscotto</a></p>
+</section>
+{% endblock %}

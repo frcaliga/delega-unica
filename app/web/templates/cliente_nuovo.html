@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% import "_macro.html" as m with context %}
+{% set sezione = "clienti" %}
+{% block titolo %}Nuovo cliente{% endblock %}
+{% block contenuto %}
+<p class="briciole"><a href="/studio/clienti">Clienti</a> /</p>
+<h1>Nuovo cliente</h1>
+<section class="pannello">
+  {{ m.errori(errori) }}
+  <form method="post" action="/studio/clienti/nuovo">
+    {{ m.csrf() }}
+    {% set nuovo = true %}{% set cliente = none %}
+    {% include "_anagrafica.html" %}
+    <div class="azioni"><button type="submit">Salva cliente</button><a href="/studio/clienti">Annulla</a></div>
+  </form>
+</section>
+{% endblock %}

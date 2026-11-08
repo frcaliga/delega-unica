@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% import "_macro.html" as m with context %}
+{% set sezione = "studio" %}
+{% block titolo %}Studio{% endblock %}
+{% block contenuto %}
+<h1>{{ tenant.name }}</h1>
+<p class="sottotitolo">Intermediario delegato · codice fiscale <code>{{ tenant.codice_fiscale }}</code></p>
+
+<section class="pannello">
+  <h2>Dati dell'intermediario</h2>
+  {% if user.role == Role.ADMIN %}
+  {{ m.errori(errori_studio) }}
+  <form method="post" action="/studio/studio">
+    {{ m.csrf() }}
+    {{ m.campo("name", "Denominazione", tenant.name, obbligatorio=true, attr='maxlength="200"') }}
+    {% if tenant.codice_fiscale|length == 16 %}
+    <p class="nota">L'intermediario e' una persona fisica: cognome e nome sono obbligatori nel file XML.</p>
+    <div class="riga">
+      {{ m.campo("cognome", "Cognome", tenant.cognome, obbligatorio=true, attr='maxlength="80"') }}
+      {{ m.campo("nome", "Nome", tenant.nome, obbligatorio=true, attr='maxlength="80"') }}
+    </div>
+    {% endif %}
+    <div class="azioni"><button type="submit">Salva</button></div>
+  </form>
+  {% else %}
+  <dl class="dati"><dt>Denominazione</dt><dd>{{ tenant.name }}</dd>
+  {% if tenant.cognome %}<dt>Intermediario</dt><dd>{{ tenant.cognome }} {{ tenant.nome }}</dd>{% endif %}</dl>
+  {% endif %}
+</section>
+
+{% if utenti %}
+<section class="pannello">
+  <h2>Utenti</h2>
+  <table>
+    <thead><tr><th>Nome</th><th>Email</th><th>Ruolo</th><th>Secondo fattore</th><th>Stato</th></tr></thead>
+    <tbody>
+    {% for u in utenti %}
+    <tr><td>{{ u.full_name }}</td><td>{{ u.email }}</td><td>{{ RUOLI[u.role] }}</td>
+      <td>{{ "Attivo" if u.totp_enabled else "Da configurare" }}</td><td>{{ "Attivo" if u.active else "Disattivato" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if user.role == Role.ADMIN %}
+  <details {% if errori_utente %}open{% endif %}>
+    <summary>Nuovo utente</summary>
+    {{ m.errori(errori_utente) }}
+    <form method="post" action="/studio/studio/utenti">
+      {{ m.csrf() }}
+      <div class="riga">
+        {{ m.campo("full_name", "Nome e cognome", dati_utente.get("full_name"), obbligatorio=true) }}
+        {{ m.campo("email", "Email", dati_utente.get("email"), tipo="email", obbligatorio=true) }}
+      </div>
+      <div class="riga">
+        {{ m.scelta("role", "Ruolo", RUOLI, dati_utente.get("role", "operatore"), obbligatorio=true) }}
+        {{ m.campo("password", "Password iniziale", tipo="password", obbligatorio=true, aiuto="Almeno 12 caratteri, da comunicare all'utente di persona", attr='minlength="12" autocomplete="new-password"') }}
+      </div>
+      <div class="azioni"><button type="submit">Crea utente</button></div>
+    </form>
+  </details>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

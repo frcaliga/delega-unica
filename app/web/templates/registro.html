@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% set sezione = "registro" %}
+{% block titolo %}Registro{% endblock %}
+{% block contenuto %}
+<div class="titolo-azioni">
+  <h1>Registro cronologico</h1>
+  {% if puo_esportare %}
+  <div class="azioni">
+    <form method="post" action="/studio/registro/verifica" class="in-linea"
+          hx-post="/studio/registro/verifica" hx-target="#verifica" hx-swap="innerHTML">
+      <input type="hidden" name="{{ CAMPO_CSRF }}" value="{{ csrf_token }}">
+      <button class="secondario" type="submit">Verifica l'integrita'</button>
+    </form>
+    <a class="bottone secondario" hx-boost="false" download href="/studio/registro/export.csv?dal={{ dal }}&amp;al={{ al }}">Esporta CSV</a>
+  </div>
+  {% endif %}
+</div>
+<div id="verifica"></div>
+<form class="filtri-date" method="get" action="/studio/registro">
+  <label class="campo"><span>Dal</span><input type="date" name="dal" value="{{ dal }}"></label>
+  <label class="campo"><span>Al</span><input type="date" name="al" value="{{ al }}"></label>
+  <button class="secondario" type="submit">Filtra</button>
+</form>
+<section class="pannello">
+  {% if voci %}
+  <table class="registro">
+    <thead><tr><th>N.</th><th>Data</th><th>Operazione</th><th>Delegante</th><th>Sottoscrittore</th><th>Documento</th><th>Servizi</th></tr></thead>
+    <tbody>
+    {% for v in voci %}
+    <tr>
+      <td><a href="/studio/deleghe/{{ v.delega_id }}">{{ v.numero }}</a></td>
+      <td>{{ v.data|data }}</td>
+      <td>{{ tipi[v.tipo_richiesta.value] }}</td>
+      <td>{{ v.delegante_nominativo }}<br><small>{{ v.delegante_cf }}</small></td>
+      <td>{{ v.sottoscrittore_nominativo }}<br><small>{{ v.sottoscrittore_cf }}</small></td>
+      <td><small>{{ v.documento_estremi or "" }}</small></td>
+      <td><small>{{ v.servizi|join(", ") }}</small></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="vuoto">Nessuna voce{% if dal or al %} nel periodo indicato{% endif %}. Le deleghe entrano nel registro quando si carica il file firmato.</p>{% endif %}
+</section>
+{% endblock %}

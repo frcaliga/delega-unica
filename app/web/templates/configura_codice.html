@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% import "_macro.html" as m with context %}
+{% block titolo %}Configura il secondo fattore{% endblock %}
+{% block classe_main %}accesso{% endblock %}
+{% block contenuto %}
+<section class="pannello stretto">
+  <h1>Configura il secondo fattore</h1>
+  <p>Per usare la piattaforma serve un'app di autenticazione (Google Authenticator, Microsoft Authenticator, 1Password o simili).</p>
+  <ol>
+    <li>Inquadrare il codice QR con l'app.</li>
+    <li>Inserire qui sotto il codice a sei cifre che l'app mostra.</li>
+  </ol>
+  <div class="qr">{{ qr|safe }}</div>
+  <p class="nota">Se non si puo' inquadrare il QR, inserire a mano questa chiave: <code class="segreto">{{ segreto }}</code></p>
+  {{ m.errori(errori) }}
+  <form method="post" action="/studio/configura-codice">
+    {{ m.csrf() }}
+    {{ m.campo("code", "Codice", obbligatorio=true, attr='inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"') }}
+    <button type="submit">Attiva e accedi</button>
+  </form>
+</section>
+{% endblock %}

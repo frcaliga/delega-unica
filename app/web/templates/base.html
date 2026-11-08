@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titolo %}Delega Unica{% endblock %} · Delega Unica</title>
+  <meta name="htmx-config" content='{"includeIndicatorStyles": false, "allowEval": false, "historyCacheSize": 0, "responseHandling": [{"code": "204", "swap": false}, {"code": "^[23]..$", "swap": true}, {"code": "^(401|403|404|409|422)$", "swap": true, "error": false}, {"code": "...", "swap": false, "error": true}]}'>
+  <link rel="stylesheet" href="/studio/static/app.css">
+  <script src="/studio/static/htmx.min.js" defer></script>
+</head>
+<body hx-boost="true" hx-headers='{"{{ HEADER_CSRF }}": "{{ csrf_token }}"}'>
+  {% if user %}
+  <header class="testata">
+    <a class="marchio" href="/studio">Delega Unica</a>
+    <nav>
+      <a href="/studio" {% if sezione == "cruscotto" %}aria-current="page"{% endif %}>Cruscotto</a>
+      <a href="/studio/clienti" {% if sezione == "clienti" %}aria-current="page"{% endif %}>Clienti</a>
+      <a href="/studio/deleghe" {% if sezione == "deleghe" %}aria-current="page"{% endif %}>Deleghe</a>
+      <a href="/studio/registro" {% if sezione == "registro" %}aria-current="page"{% endif %}>Registro</a>
+      <a href="/studio/studio" {% if sezione == "studio" %}aria-current="page"{% endif %}>Studio</a>
+    </nav>
+    <div class="utente">
+      <span>{{ user.full_name }} · {{ RUOLI[user.role] }}</span>
+      <form method="post" action="/studio/esci">
+        <input type="hidden" name="{{ CAMPO_CSRF }}" value="{{ csrf_token }}">
+        <button class="link" type="submit">Esci</button>
+      </form>
+    </div>
+  </header>
+  {% endif %}
+  <main class="{% block classe_main %}contenuto{% endblock %}">
+    {% if avviso %}<p class="avviso ok" role="status">{{ avviso }}</p>{% endif %}
+    {% block contenuto %}{% endblock %}
+  </main>
+</body>
+</html>
