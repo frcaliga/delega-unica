@@ -31,6 +31,14 @@
         {% endif %}
       </td>
     </tr>
+    <tr class="riga-anteprima">
+      <td colspan="5">
+        <details>
+          <summary>Fronte e retro</summary>
+          <img class="anteprima-archivio" loading="lazy" src="/studio/documenti/{{ doc.id }}/anteprima.jpg" alt="Fronte e retro del documento {{ doc.numero or '' }}">
+        </details>
+      </td>
+    </tr>
     {% endfor %}
     </tbody>
   </table>
@@ -57,6 +65,14 @@
         <form method="post" action="/studio/documenti/{{ doc.id }}/elimina" class="in-linea" hx-confirm="Eliminare la copia del documento? Le copie gia' usate per un'adesione FEA restano nell'adesione.">
           {{ m.csrf() }}<button class="pericolo" type="submit">Elimina</button>
         </form>
+      </td>
+    </tr>
+    <tr class="riga-anteprima">
+      <td colspan="5">
+        <details>
+          <summary>Fronte e retro</summary>
+          <img class="anteprima-archivio" loading="lazy" src="/studio/documenti/{{ doc.id }}/anteprima.jpg" alt="Fronte e retro del documento {{ doc.numero or '' }}">
+        </details>
       </td>
     </tr>
     {% endfor %}

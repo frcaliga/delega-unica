@@ -3,7 +3,7 @@
 import hashlib
 import io
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 from app.domain import codice_fiscale
@@ -27,6 +27,9 @@ class Copia:
     dati: bytes
     tipo: str
     nome: str
+    # Per fronte e retro uniti in un PDF: le foto originali, che si leggono ciascuna
+    # ritagliata sulla carta (il PDF ne perde la geometria)
+    foto: list[bytes] = field(default_factory=list)
 
     @property
     def sha256(self) -> str:
@@ -67,15 +70,54 @@ def unisci(copie: list[Copia]) -> tuple[Copia | None, str]:
     buf = io.BytesIO()
     pagine[0].save(buf, "PDF", save_all=True, append_images=pagine[1:], resolution=300)
     nome = copie[0].nome.rsplit(".", 1)[0][:140] + ".pdf"
-    unita = Copia(buf.getvalue(), "application/pdf", nome)
+    unita = Copia(buf.getvalue(), "application/pdf", nome, foto=[c.dati for c in copie])
     if len(unita.dati) > MAX_COPIA:
         return None, "Fronte e retro insieme superano 10 MB"
     return unita, ""
 
 
+def pagine(dati: bytes, tipo: str, lato: int = 1000, max_pagine: int = 4) -> list:
+    """Le pagine della copia come immagini PIL ridotte (lato lungo <= `lato`), per l'anteprima."""
+    from PIL import Image, ImageOps
+
+    if tipo == "application/pdf":
+        import pypdfium2 as pdfium
+
+        doc = pdfium.PdfDocument(dati)
+        try:
+            risultato = []
+            for i in range(min(len(doc), max_pagine)):
+                w, h = doc[i].get_size()
+                img = doc[i].render(scale=min(4.0, lato / max(w, h))).to_pil()
+                risultato.append(img.convert("RGB"))
+            return risultato
+        finally:
+            doc.close()
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(dati))).convert("RGB")
+    img.thumbnail((lato, lato))
+    return [img]
+
+
+def anteprima(dati: bytes, tipo: str, lato: int = 1000) -> bytes:
+    """Fronte e retro affiancati in un unico JPEG, per vederli nella pagina."""
+    from PIL import Image
+
+    imgs = pagine(dati, tipo, lato)
+    margine = 16
+    larghezza = sum(i.width for i in imgs) + margine * (len(imgs) - 1)
+    foglio = Image.new("RGB", (larghezza, max(i.height for i in imgs)), "white")
+    x = 0
+    for i in imgs:
+        foglio.paste(i, (x, 0))
+        x += i.width + margine
+    buf = io.BytesIO()
+    foglio.save(buf, "JPEG", quality=80)
+    return buf.getvalue()
+
+
 def proposta(copia: Copia, oggi: date, cf_cliente: str | None = None) -> PropostaOut:
     try:
-        esito = lettura_documenti.leggi(copia.dati, copia.tipo, oggi)
+        esito = lettura_documenti.leggi(copia.dati, copia.tipo, oggi, foto=copia.foto)
     except lettura_documenti.LetturaNonDisponibile:
         return PropostaOut(letta=False, avvisi=["Lettura automatica non disponibile"])
     p = PropostaOut(

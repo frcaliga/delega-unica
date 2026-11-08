@@ -387,7 +387,7 @@ def test_comando_elimina_documenti_scaduti(client, headers, mario, db, monkeypat
 
     from app.cli import cli
 
-    monkeypatch.setattr(lettura_documenti, "leggi", lambda *a: lettura_documenti.Lettura())
+    monkeypatch.setattr(lettura_documenti, "leggi", lambda *a, **k: lettura_documenti.Lettura())
     for scadenza in ("2024-01-01", "2026-01-01"):
         res = client.post(
             f"/clienti/{mario['id']}/documenti-identita",
@@ -443,3 +443,45 @@ def test_elenco_comuni_istat_in_windows_1252(tmp_path):
         elenco = ocr_documenti.load_comuni(f)
         assert elenco["D704"] == ("Forlì", "FC")
         assert elenco["A952"] == ("Bolzano", "BZ")
+
+
+@tesseract
+def test_nuovo_cliente_altro_documento_svuota_i_campi_letti_prima(browser):
+    bianca = io.BytesIO()
+    Image.new("RGB", (800, 500), "white").save(bianca, "PNG")
+    precedenti = {
+        "campi_letti": "codice_fiscale,cognome,nome",
+        "codice_fiscale": MARIO,
+        "cognome": "Rossi",
+        "nome": "Mario",
+        "telefono": "+393331234567",
+    }
+    res = browser.post(
+        "/studio/clienti/nuovo/leggi",
+        precedenti,
+        files={"copia": ("altro.png", bianca.getvalue(), "image/png")},
+        htmx="campi-nuovo-cliente",
+    )
+    assert res.status_code == 200, res.text
+    assert MARIO not in res.text and 'value="Rossi"' not in res.text
+    assert 'value="+393331234567"' in res.text  # scritto a mano: resta
+
+
+@tesseract
+def test_anteprima_di_fronte_e_retro(browser, db):
+    copia = _copia_mario()
+    letti = browser.post("/studio/clienti/nuovo/leggi", {}, files=copia, htmx="campi-nuovo-cliente")
+    assert 'src="data:image/jpeg;base64,' in letti.text
+
+    dati = {"codice_fiscale": MARIO, "cognome": "Rossi", "nome": "Mario", "documento_tipo": "1"}
+    res = browser.post("/studio/clienti/nuovo", dati, files=copia)
+    assert res.status_code == 303, res.text
+    doc = db.scalars(select(DocumentoIdentita)).one()
+    scheda = browser.get(res.headers["location"].split("?")[0])
+    assert f"/studio/documenti/{doc.id}/anteprima.jpg" in scheda.text
+    img = browser.get(f"/studio/documenti/{doc.id}/anteprima.jpg")
+    assert img.status_code == 200 and img.headers["content-type"] == "image/jpeg"
+    assert img.headers["cache-control"] == "no-store"
+    assert Image.open(io.BytesIO(img.content)).width <= 1000
+    motivi = [a.details.get("motivo") for a in db.scalars(select(AuditLog))]
+    assert "anteprima" in motivi

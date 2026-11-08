@@ -1,9 +1,11 @@
 """Documenti d'identita' dalle pagine: lettura dei dati, archivio e precompilazione."""
 
+import base64
 import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, Response
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -51,14 +53,24 @@ def _file(uploads: list[UploadFile] | None) -> list[UploadFile]:
 
 async def _proposta(
     uploads: list[UploadFile] | None, cf: str | None
-) -> tuple[PropostaOut | None, list]:
+) -> tuple[PropostaOut | None, list, str | None]:
+    """Proposta letta dalla copia, errori e anteprima (data URI) di fronte e retro."""
     if not (scelti := _file(uploads)):
-        return None, ["Scegliere il file con la copia del documento"]
+        return None, ["Scegliere il file con la copia del documento"], None
     try:
         copia = await api.leggi_upload(scelti)
     except HTTPException as exc:
-        return None, errori_da(exc)
-    return await api.leggi_proposta(copia, cf), []
+        return None, errori_da(exc), None
+    proposta = await api.leggi_proposta(copia, cf)
+    return proposta, [], await run_in_threadpool(_anteprima_inline, copia)
+
+
+def _anteprima_inline(copia: servizio.Copia) -> str | None:
+    try:
+        jpeg = servizio.anteprima(copia.dati, copia.tipo)
+    except Exception:
+        return None
+    return "data:image/jpeg;base64," + base64.b64encode(jpeg).decode()
 
 
 def _estremi(form) -> tuple[dict, list[str]]:
@@ -125,12 +137,18 @@ async def leggi(
 ) -> Response:
     """Frammento HTMX: estremi e anagrafica letti dal documento, da confermare."""
     cliente = api_clienti.get_cliente(db, user, cliente_id)
-    proposta, errori = await _proposta(copia, cliente.codice_fiscale)
+    proposta, errori, anteprima = await _proposta(copia, cliente.codice_fiscale)
     dati = dati_da_proposta(proposta) if proposta else {}
     return pagina(
         request,
         "_documento_campi.html",
-        {"cliente": cliente, "dati_documento": dati, "proposta": proposta, "errori": errori},
+        {
+            "cliente": cliente,
+            "dati_documento": dati,
+            "proposta": proposta,
+            "errori": errori,
+            "anteprima": anteprima,
+        },
         user=user,
     )
 
@@ -198,6 +216,24 @@ def scarica(
     return api.scarica(documento_id, request=request, user=user, db=db, portachiavi=portachiavi)
 
 
+@router.get("/documenti/{documento_id}/anteprima.jpg")
+def anteprima(
+    request: Request,
+    documento_id: uuid.UUID,
+    user: User = Depends(utente_web),
+    db: Session = Depends(get_db),
+    portachiavi: Portachiavi = Depends(get_portachiavi),
+) -> Response:
+    """Fronte e retro della copia archiviata, ridotti, da vedere nella scheda."""
+    doc = api.get_documento(db, user, documento_id)
+    dati = api.copia_in_chiaro(db, request, user, doc, portachiavi, "anteprima")
+    try:
+        jpeg = servizio.anteprima(dati, doc.copia_tipo)
+    except Exception as exc:  # copia non visualizzabile: resta scaricabile
+        raise HTTPException(422, detail="Anteprima non disponibile") from exc
+    return Response(jpeg, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
 @router.post("/documenti/{documento_id}/elimina")
 def elimina(
     request: Request,
@@ -221,16 +257,34 @@ async def leggi_nuovo(
     user: User = Depends(utente_web),
 ) -> Response:
     form = await request.form()
-    cf = (vuoto_a_none(form.get("codice_fiscale")) or "").upper() or None
-    proposta, errori = await _proposta(copia, cf)
     dati = {k: vuoto_a_none(form.get(k)) for k in web_clienti.CAMPI}
+    # I campi compilati dalla lettura precedente si svuotano: con un altro documento non devono
+    # restare i dati della persona di prima. Restano solo quelli scritti a mano.
+    precedenti = set(str(form.get("campi_letti") or "").split(",")) & set(web_clienti.CAMPI)
+    for k in precedenti:
+        dati[k] = None
+    cf = (dati.get("codice_fiscale") or "").upper() or None
+    proposta, errori, anteprima = await _proposta(copia, cf)
+    letti: list[str] = []
     if proposta:
-        letti = dati_da_proposta(proposta)
-        dati.update({k: v for k, v in letti.items() if v and (k != "codice_fiscale" or not cf)})
+        for k, v in dati_da_proposta(proposta).items():
+            if v and (k != "codice_fiscale" or not cf):
+                dati[k] = v
+                letti.append(k)
+    elif not _file(copia):
+        letti = sorted(precedenti)  # nessun file scelto: la lettura precedente resta valida
+        for k in precedenti:
+            dati[k] = vuoto_a_none(form.get(k))
     return pagina(
         request,
         "_nuovo_cliente_campi.html",
-        {"dati": dati, "proposta": proposta, "errori": errori},
+        {
+            "dati": dati,
+            "proposta": proposta,
+            "errori": errori,
+            "campi_letti": ",".join(letti),
+            "anteprima": anteprima,
+        },
         user=user,
     )
 

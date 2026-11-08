@@ -7,6 +7,7 @@
   <meta name="htmx-config" content='{"includeIndicatorStyles": false, "allowEval": false, "historyCacheSize": 0, "responseHandling": [{"code": "204", "swap": false}, {"code": "^[23]..$", "swap": true}, {"code": "^(401|403|404|409|422)$", "swap": true, "error": false}, {"code": "...", "swap": false, "error": true}]}'>
   <link rel="stylesheet" href="/studio/static/app.css">
   <script src="/studio/static/htmx.min.js" defer></script>
+  <script src="/studio/static/app.js" defer></script>
 </head>
 <body hx-boost="true" hx-headers='{"{{ HEADER_CSRF }}": "{{ csrf_token }}"}'>
   {% if user %}
@@ -29,6 +30,7 @@
   </header>
   {% endif %}
   <main class="{% block classe_main %}contenuto{% endblock %}">
+    <p id="errore-richiesta" class="avviso errore errore-richiesta" role="alert" hidden></p>
     {% if avviso %}<p class="avviso ok" role="status">{{ avviso }}</p>{% endif %}
     {% block contenuto %}{% endblock %}
   </main>

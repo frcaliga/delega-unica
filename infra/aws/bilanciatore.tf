@@ -1,9 +1,11 @@
+# idle_timeout: la lettura di una foto del documento puo' superare il minuto (default 60 s)
 resource "aws_lb" "principale" {
   name                       = var.nome
   load_balancer_type         = "application"
   subnets                    = aws_subnet.pubblica[*].id
   security_groups            = [aws_security_group.alb.id]
   drop_invalid_header_fields = true
+  idle_timeout               = 180
 }
 
 resource "aws_lb_target_group" "applicazione" {
