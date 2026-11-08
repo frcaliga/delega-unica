@@ -12,6 +12,7 @@ Milano.
 | Segreti | Secrets Manager | Chiave dell'applicazione e certificato dell'autorita' |
 | Accesso | Application Load Balancer | Solo HTTPS (TLS 1.2 e 1.3); HTTP viene reindirizzato |
 | Log | CloudWatch | Conservati un anno, cifrati |
+| Allarmi | CloudWatch e SNS | Email per errori 500 e container non disponibili |
 
 Costo indicativo con la configurazione predefinita: circa 90-110 euro al mese, da verificare con
 il [calcolatore AWS](https://calculator.aws/). I costi principali sono database, container e
@@ -119,6 +120,13 @@ aws ecs execute-command --cluster delega-unica --task $TASK --container api --in
 ```
 
 La password viene chiesta in modo interattivo.
+
+### 8. Allarmi
+
+Dopo l'apply arriva all'indirizzo `email_allarmi` un'email di AWS Notifications: va confermata
+con il link *Confirm subscription*, altrimenti gli allarmi non partono. Scatta un allarme se in
+5 minuti ci sono almeno 3 errori 500 o se per 5 minuti i container funzionanti sono meno di
+`istanze`; quando il problema rientra arriva un'email di ritorno alla normalita'.
 
 ## Rilasci successivi
 

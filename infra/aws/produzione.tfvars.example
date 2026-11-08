@@ -4,3 +4,4 @@ istanze               = 2
 db_classe             = "db.t4g.small"
 db_multi_az           = false
 sms_mittente          = "StudioRossi"
+email_allarmi         = "tecnico@studiorossi.it"
