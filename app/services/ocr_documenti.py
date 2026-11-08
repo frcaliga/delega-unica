@@ -20,9 +20,11 @@ import itertools
 import os
 import re
 import sys
+import time
 from collections import Counter
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date
 from difflib import SequenceMatcher
@@ -230,6 +232,19 @@ def ocr_words(img: np.ndarray, scale: float, variant: str, psm: int = 11) -> tup
 # Tesseract gira in processi separati: le varianti di una pagina si leggono in parallelo
 OCR_PARALLELO = max(1, min(4, os.cpu_count() or 1))
 
+# Tempo massimo della lettura: scaduto, le letture mirate successive restituiscono testo vuoto e
+# l'estrazione si chiude con quello che ha gia' trovato. {"fine": monotonic, "scaduto": bool}
+_TEMPO: ContextVar[dict | None] = ContextVar("tempo_lettura", default=None)
+
+
+def _tempo_scaduto() -> bool:
+    t = _TEMPO.get()
+    if t is None:
+        return False
+    if time.monotonic() > t["fine"]:
+        t["scaduto"] = True
+    return t["scaduto"]
+
 
 def ocr_page(rgb: np.ndarray) -> PageOCR:
     page = PageOCR(rgb)
@@ -276,6 +291,8 @@ def ocr_crop(
 
 def _in_parallelo(lavori: list[tuple[np.ndarray, str]]) -> list[str]:
     """Esegue Tesseract sulle immagini (immagine, configurazione) in parallelo, in ordine."""
+    if _tempo_scaduto():
+        return [""] * len(lavori)
     with ThreadPoolExecutor(OCR_PARALLELO) as pool:
         return list(
             pool.map(
@@ -1031,7 +1048,7 @@ def _region_lines(rgb: np.ndarray, box, whitelist: str | None = None) -> list[st
     ims = [cv2.copyMakeBorder(im, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255) for im in ims]
     ims += _senza_puntini(gray)
     cfg = "--psm 7" + (f" -c tessedit_char_whitelist={whitelist}" if whitelist else "")
-    return [pytesseract.image_to_string(im, lang=TESS_LANG, config=cfg).strip() for im in ims]
+    return [s.strip() for s in _in_parallelo([(im, cfg) for im in ims])]
 
 
 class _Campi:
@@ -1625,16 +1642,20 @@ def load_pages_bytes(dati: bytes, pdf: bool, max_pagine: int = 4) -> list[np.nda
     return [prepare_photo(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))]
 
 
-def process_bytes(dati: bytes, pdf: bool, comuni: dict | None = None) -> dict:
+def process_bytes(
+    dati: bytes, pdf: bool, comuni: dict | None = None, tempo_max: float | None = None
+) -> dict:
     """Riconosce il documento e ne estrae i dati."""
-    return process_pages(load_pages_bytes(dati, pdf), comuni)
+    return process_pages(load_pages_bytes(dati, pdf), comuni, tempo_max=tempo_max)
 
 
-def process_images(immagini: list[bytes], comuni: dict | None = None) -> dict:
+def process_images(
+    immagini: list[bytes], comuni: dict | None = None, tempo_max: float | None = None
+) -> dict:
     """Come process_bytes, per piu' foto dello stesso documento (fronte e retro): ogni foto e'
     ritagliata sulla carta e raddrizzata, come una foto caricata da sola."""
     pagine = [p for dati in immagini for p in load_pages_bytes(dati, False)]
-    return process_pages(pagine, comuni)
+    return process_pages(pagine, comuni, tempo_max=tempo_max)
 
 
 def process_file(path: Path, comuni: dict | None, verbose: bool = False) -> dict:
@@ -1644,8 +1665,28 @@ def process_file(path: Path, comuni: dict | None, verbose: bool = False) -> dict
 
 
 def process_pages(
-    rgbs: list[np.ndarray], comuni: dict | None, verbose: bool = False, nome: str = ""
+    rgbs: list[np.ndarray],
+    comuni: dict | None,
+    verbose: bool = False,
+    nome: str = "",
+    tempo_max: float | None = None,
 ) -> dict:
+    """Riconosce ed estrae. Con `tempo_max` (secondi) la lettura si ferma a quel punto e
+    restituisce i dati trovati, con un avviso."""
+    tempo = {"fine": time.monotonic() + tempo_max, "scaduto": False} if tempo_max else None
+    token = _TEMPO.set(tempo)
+    try:
+        data = _process_pages(rgbs, comuni, verbose, nome)
+    finally:
+        _TEMPO.reset(token)
+    if tempo and tempo["scaduto"]:
+        data.setdefault("avvisi", []).append(
+            "Lettura interrotta per il tempo massimo: i campi mancanti vanno compilati a mano"
+        )
+    return data
+
+
+def _process_pages(rgbs: list[np.ndarray], comuni: dict | None, verbose: bool, nome: str) -> dict:
     pages = []
     with ThreadPoolExecutor(OCR_PARALLELO) as pool:
         raddrizzate = list(pool.map(fix_orientation, rgbs))

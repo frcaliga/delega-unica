@@ -98,6 +98,17 @@ def pagine(dati: bytes, tipo: str, lato: int = 1000, max_pagine: int = 4) -> lis
     return [img]
 
 
+def anteprima_inline(copia: Copia) -> str | None:
+    """Anteprima come data URI, da mostrare accanto ai campi letti; None se non disponibile."""
+    import base64
+
+    try:
+        jpeg = anteprima(copia.dati, copia.tipo)
+    except Exception:
+        return None
+    return "data:image/jpeg;base64," + base64.b64encode(jpeg).decode()
+
+
 def anteprima(dati: bytes, tipo: str, lato: int = 1000) -> bytes:
     """Fronte e retro affiancati in un unico JPEG, per vederli nella pagina."""
     from PIL import Image
@@ -115,9 +126,13 @@ def anteprima(dati: bytes, tipo: str, lato: int = 1000) -> bytes:
     return buf.getvalue()
 
 
-def proposta(copia: Copia, oggi: date, cf_cliente: str | None = None) -> PropostaOut:
+def proposta(
+    copia: Copia, oggi: date, cf_cliente: str | None = None, tempo_max: float | None = None
+) -> PropostaOut:
     try:
-        esito = lettura_documenti.leggi(copia.dati, copia.tipo, oggi, foto=copia.foto)
+        esito = lettura_documenti.leggi(
+            copia.dati, copia.tipo, oggi, foto=copia.foto, tempo_max=tempo_max
+        )
     except lettura_documenti.LetturaNonDisponibile:
         return PropostaOut(letta=False, avvisi=["Lettura automatica non disponibile"])
     p = PropostaOut(

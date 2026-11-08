@@ -179,3 +179,9 @@ pre.dichiarazione { font-family: inherit; font-size: 0.95rem; }
 .anteprima-archivio { margin-top: 0.5rem; }
 tr.riga-anteprima td { border-top: none; padding-top: 0; }
 tr:has(+ tr.riga-anteprima) td { border-bottom: none; }
+
+/* Lettura del documento in background */
+.lettura-in-corso { display: flex; align-items: center; gap: 0.6rem; margin: 0.75rem 0; padding: 0.7rem 1rem; border-radius: var(--raggio); background: var(--sfondo); border: 1px solid var(--bordo); }
+.rotella { width: 1rem; height: 1rem; flex: none; border: 2px solid var(--bordo); border-top-color: var(--primario); border-radius: 50%; animation: giro 0.9s linear infinite; }
+@keyframes giro { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .rotella { animation: none; } }
