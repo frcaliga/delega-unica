@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% import "_macro.html" as m with context %}
+{% set sezione = "cruscotto" %}
+{% block titolo %}Cruscotto{% endblock %}
+{% block contenuto %}
+<h1>Cruscotto</h1>
+<section class="riquadri">
+  {% for s in [StatoDelega.BOZZA, StatoDelega.IN_FIRMA, StatoDelega.FIRMATA, StatoDelega.INVIATA, StatoDelega.ATTIVA] %}
+  <a class="riquadro" href="/studio/deleghe?stato={{ s.value }}">
+    <strong>{{ conteggi.get(s, 0) }}</strong>
+    <span>{{ STATI[s] }}</span>
+  </a>
+  {% endfor %}
+</section>
+
+<section class="pannello">
+  <h2>Da completare</h2>
+  {% if da_lavorare %}
+  <table>
+    <thead><tr><th>Cliente</th><th>Operazione</th><th>Firma</th><th>Stato</th><th>Prossimo passo</th></tr></thead>
+    <tbody>
+    {% for d in da_lavorare %}
+    <tr>
+      <td><a href="/studio/deleghe/{{ d.id }}">{{ d.cliente.nominativo }}</a><br><small>{{ d.cliente.codice_fiscale }}</small></td>
+      <td>{{ TIPI_RICHIESTA[d.tipo_richiesta] }}</td>
+      <td>{{ MODALITA_FIRMA.get(d.modalita_firma, d.modalita_firma) }}</td>
+      <td>{{ m.stato(d.stato) }}</td>
+      <td>
+        {% if d.stato == StatoDelega.BOZZA %}Generare il file XML
+        {% elif d.stato == StatoDelega.IN_FIRMA %}{% if d.busta_cliente %}Controfirmare e caricare{% else %}Raccogliere la firma{% endif %}
+        {% elif d.stato == StatoDelega.FIRMATA %}Trasmettere all'AdE
+        {% else %}Registrare l'esito della ricevuta{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="vuoto">Nessuna delega in lavorazione.</p>{% endif %}
+</section>
+
+<section class="pannello">
+  <h2>In scadenza nei prossimi 90 giorni</h2>
+  {% if in_scadenza %}
+  <table>
+    <thead><tr><th>Cliente</th><th>Scadenza</th><th></th></tr></thead>
+    <tbody>
+    {% for d in in_scadenza %}
+    <tr>
+      <td><a href="/studio/deleghe/{{ d.id }}">{{ d.cliente.nominativo }}</a><br><small>{{ d.cliente.codice_fiscale }}</small></td>
+      <td>{{ d.data_scadenza|data }}</td>
+      <td><a class="bottone secondario" href="/studio/clienti/{{ d.cliente_id }}/deleghe/nuova?tipo=3&amp;origine={{ d.id }}">Rinnova</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="vuoto">Nessuna delega in scadenza.</p>{% endif %}
+</section>
+{% endblock %}

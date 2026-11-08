@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% import "_macro.html" as m with context %}
+{% set sezione = "clienti" %}
+{% block titolo %}{{ cliente.nominativo }}{% endblock %}
+{% block contenuto %}
+<p class="briciole"><a href="/studio/clienti">Clienti</a> /</p>
+<div class="titolo-azioni">
+  <div>
+    <h1>{{ cliente.nominativo }}</h1>
+    <p class="sottotitolo"><code>{{ cliente.codice_fiscale }}</code> · {{ "Persona fisica" if cliente.persona_fisica else "Soggetto diverso da persona fisica" }}{% if cliente.partita_iva_attiva %} · P.IVA attiva{% endif %}</p>
+  </div>
+  <a class="bottone" href="/studio/clienti/{{ cliente.id }}/deleghe/nuova">Nuovo conferimento</a>
+</div>
+
+<section class="pannello">
+  <h2>Deleghe</h2>
+  {% if deleghe %}
+  <table>
+    <thead><tr><th>Creata</th><th>Operazione</th><th>Stato</th><th>Scadenza</th><th></th></tr></thead>
+    <tbody>
+    {% for d in deleghe %}
+    <tr>
+      <td><a href="/studio/deleghe/{{ d.id }}">{{ d.created_at|data }}</a></td>
+      <td>{{ TIPI_RICHIESTA[d.tipo_richiesta] }}</td>
+      <td>{{ m.stato(d.stato) }}</td>
+      <td>{{ d.data_scadenza|data }}</td>
+      <td class="azioni-riga">
+        {% if d.stato == StatoDelega.ATTIVA %}
+        {% if d.id in rinnovabili %}<a class="bottone secondario" href="/studio/clienti/{{ cliente.id }}/deleghe/nuova?tipo=3&amp;origine={{ d.id }}">Rinnova</a>{% endif %}
+        <a class="bottone secondario" href="/studio/clienti/{{ cliente.id }}/deleghe/nuova?tipo=2&amp;origine={{ d.id }}">Revoca</a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="vuoto">Nessuna delega per questo cliente.</p>{% endif %}
+</section>
+
+<section class="pannello">
+  <h2>FEA allo sportello</h2>
+  {% if not fea_ammessa %}
+  <p class="nota">La FEA con OTP e' ammessa solo per persone fisiche senza partita IVA. Questo cliente firma con firma digitale o con FEA CIE.</p>
+  {% else %}
+  {% if adesioni %}
+  <table>
+    <thead><tr><th>Creata</th><th>Documento</th><th>Cellulare</th><th>Stato</th></tr></thead>
+    <tbody>
+    {% for a in adesioni %}
+    <tr>
+      <td><a href="/studio/adesioni/{{ a.id }}">{{ a.created_at|data }}</a></td>
+      <td>{{ TIPI_DOCUMENTO[a.documento_tipo] }} {{ a.documento_numero }}<br><small>scade il {{ a.documento_scadenza|data }}</small></td>
+      <td>{{ a.cellulare }}</td>
+      <td>{{ m.stato_adesione(a.stato) }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="nota">Il cliente non ha ancora aderito. Per aderire deve essere presente allo sportello con un documento d'identita' valido e il proprio cellulare.</p>
+  {% endif %}
+  <details {% if errori_adesione %}open{% endif %}>
+    <summary>Nuova adesione (identificazione di persona)</summary>
+    {{ m.errori(errori_adesione) }}
+    <form method="post" action="/studio/clienti/{{ cliente.id }}/adesioni" enctype="multipart/form-data">
+      {{ m.csrf() }}
+      <p class="nota">Verificare di persona l'identita' del cliente con il documento originale, poi registrarne gli estremi e allegarne la copia. Il cliente ricevera' un SMS con il codice per accettare le condizioni del servizio.</p>
+      <div class="riga">
+        {{ m.scelta("documento_tipo", "Documento", TIPI_DOCUMENTO, dati_adesione.get("documento_tipo", "1"), obbligatorio=true) }}
+        {{ m.campo("documento_numero", "Numero", dati_adesione.get("documento_numero"), obbligatorio=true, attr='maxlength="30"') }}
+      </div>
+      <div class="riga">
+        {{ m.campo("documento_rilasciato_da", "Rilasciato da", dati_adesione.get("documento_rilasciato_da"), obbligatorio=true, attr='maxlength="100"') }}
+        {{ m.campo("documento_scadenza", "Scadenza", dati_adesione.get("documento_scadenza"), tipo="date", obbligatorio=true) }}
+      </div>
+      <div class="riga">
+        {{ m.campo("cellulare", "Cellulare del cliente", dati_adesione.get("cellulare", cliente.telefono), tipo="tel", obbligatorio=true) }}
+        <label class="campo"><span>Copia del documento <abbr title="obbligatorio">*</abbr></span>
+          <input type="file" name="copia_documento" accept="application/pdf,image/jpeg,image/png" required>
+          <small>PDF, JPEG o PNG, fino a 10 MB</small></label>
+      </div>
+      <div class="azioni"><button type="submit">Registra e invia il codice</button></div>
+    </form>
+  </details>
+  {% endif %}
+</section>
+
+<section class="pannello">
+  <details {% if errori_anagrafica %}open{% endif %}>
+    <summary>Anagrafica</summary>
+    {{ m.errori(errori_anagrafica) }}
+    <form method="post" action="/studio/clienti/{{ cliente.id }}">
+      {{ m.csrf() }}
+      {% set nuovo = false %}
+      {% include "_anagrafica.html" %}
+      <div class="azioni"><button type="submit">Salva modifiche</button></div>
+    </form>
+  </details>
+</section>
+{% endblock %}

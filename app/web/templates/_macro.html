@@ -1,0 +1,34 @@
+{% macro errori(elenco) %}
+{% if elenco %}
+<div class="avviso errore" role="alert">
+  {% if elenco|length == 1 %}<p>{{ elenco[0] }}</p>
+  {% else %}<p>Correggere questi punti:</p><ul>{% for e in elenco %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro csrf() %}<input type="hidden" name="{{ CAMPO_CSRF }}" value="{{ csrf_token }}">{% endmacro %}
+
+{% macro stato(s) %}<span class="stato stato-{{ s.value }}">{{ STATI[s] }}</span>{% endmacro %}
+
+{% macro stato_adesione(s) %}<span class="stato adesione-{{ s.value }}">{{ STATI_ADESIONE[s] }}</span>{% endmacro %}
+
+{% macro campo(nome, etichetta, valore="", tipo="text", obbligatorio=false, aiuto="", attr="") %}
+<label class="campo">
+  <span>{{ etichetta }}{% if obbligatorio %} <abbr title="obbligatorio">*</abbr>{% endif %}</span>
+  <input type="{{ tipo }}" name="{{ nome }}" value="{{ valore or '' }}" {% if obbligatorio %}required{% endif %} {{ attr|safe }}>
+  {% if aiuto %}<small>{{ aiuto }}</small>{% endif %}
+</label>
+{% endmacro %}
+
+{% macro scelta(nome, etichetta, opzioni, valore="", vuota=none, obbligatorio=false) %}
+<label class="campo">
+  <span>{{ etichetta }}{% if obbligatorio %} <abbr title="obbligatorio">*</abbr>{% endif %}</span>
+  <select name="{{ nome }}" {% if obbligatorio %}required{% endif %}>
+    {% if vuota is not none %}<option value="">{{ vuota }}</option>{% endif %}
+    {% for chiave, testo in opzioni.items() %}
+    <option value="{{ chiave }}" {% if chiave == valore %}selected{% endif %}>{{ testo }}</option>
+    {% endfor %}
+  </select>
+</label>
+{% endmacro %}

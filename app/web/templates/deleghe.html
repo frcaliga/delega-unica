@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% import "_macro.html" as m with context %}
+{% set sezione = "deleghe" %}
+{% block titolo %}Deleghe{% endblock %}
+{% block contenuto %}
+<h1>Deleghe</h1>
+<nav class="filtri" aria-label="Filtra per stato">
+  <a href="/studio/deleghe" {% if not stato %}aria-current="true"{% endif %}>Tutte</a>
+  {% for s, testo in STATI.items() %}
+  <a href="/studio/deleghe?stato={{ s.value }}" {% if stato == s %}aria-current="true"{% endif %}>{{ testo }}</a>
+  {% endfor %}
+</nav>
+{{ m.errori(errori) }}
+{% set fornitura = stato == StatoDelega.FIRMATA and deleghe %}
+<section class="pannello">
+  {% if fornitura %}
+  <form method="post" action="/studio/forniture" hx-boost="false" id="fornitura">
+    {{ m.csrf() }}
+    <p class="nota">Selezionare fino a 300 deleghe firmate per generare il file della fornitura massiva, da controllare e inviare con Desktop Telematico o Entratel.</p>
+  {% endif %}
+  {% if deleghe %}
+  <table>
+    <thead><tr>{% if fornitura %}<th><span class="nascosto">Seleziona</span></th>{% endif %}<th>Cliente</th><th>Operazione</th><th>Firma</th><th>Data firma</th><th>Stato</th><th>Scadenza</th></tr></thead>
+    <tbody>
+    {% for d in deleghe %}
+    <tr>
+      {% if fornitura %}<td><input type="checkbox" name="delega_ids" value="{{ d.id }}" aria-label="Includi {{ d.cliente.nominativo }}" checked></td>{% endif %}
+      <td><a href="/studio/deleghe/{{ d.id }}">{{ d.cliente.nominativo }}</a><br><small>{{ d.cliente.codice_fiscale }}</small></td>
+      <td>{{ TIPI_RICHIESTA[d.tipo_richiesta] }}</td>
+      <td>{{ MODALITA_FIRMA.get(d.modalita_firma, d.modalita_firma) }}</td>
+      <td>{{ d.data_firma|data }}</td>
+      <td>{{ m.stato(d.stato) }}</td>
+      <td>{{ d.data_scadenza|data }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="vuoto">Nessuna delega{% if stato %} in stato "{{ STATI[stato] }}"{% endif %}. Le nuove deleghe si creano dalla scheda del cliente.</p>{% endif %}
+  {% if fornitura %}
+    <div class="riga">
+      {{ m.campo("email", "Email per le comunicazioni (facoltativa)", tipo="email") }}
+      {{ m.campo("cellulare", "Cellulare per le comunicazioni (facoltativo)", attr='pattern="[0-9]{6,12}"', aiuto="Solo cifre, senza prefisso internazionale") }}
+    </div>
+    <div class="azioni"><button type="submit">Scarica il file della fornitura</button></div>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

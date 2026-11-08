@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% import "_macro.html" as m with context %}
+{% block titolo %}Codice di verifica{% endblock %}
+{% block classe_main %}accesso{% endblock %}
+{% block contenuto %}
+<section class="pannello stretto">
+  <h1>Codice di verifica</h1>
+  <p class="nota">Inserire il codice a sei cifre dell'app di autenticazione per {{ utente_mfa.email }}.</p>
+  {{ m.errori(errori) }}
+  <form method="post" action="/studio/codice">
+    {{ m.csrf() }}
+    {{ m.campo("code", "Codice", tipo="text", obbligatorio=true, attr='inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" autofocus') }}
+    <button type="submit">Verifica</button>
+  </form>
+  <p><a href="/studio/accesso">Torna all'accesso</a></p>
+</section>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% import "_macro.html" as m with context %}
+{% set sezione = "clienti" %}
+{% block titolo %}Adesione FEA · {{ cliente.nominativo }}{% endblock %}
+{% block contenuto %}
+<p class="briciole"><a href="/studio/clienti">Clienti</a> / <a href="/studio/clienti/{{ cliente.id }}">{{ cliente.nominativo }}</a> /</p>
+<h1>Adesione alla FEA {{ m.stato_adesione(adesione.stato) }}</h1>
+<p class="sottotitolo">{{ TIPI_DOCUMENTO[adesione.documento_tipo] }} n. {{ adesione.documento_numero }}, scadenza {{ adesione.documento_scadenza|data }} · cellulare {{ cellulare }}</p>
+{{ m.errori(errori) }}
+{% if otp %}<p class="avviso ok" role="status">Nuovo codice inviato a {{ otp.cellulare }}, valido fino alle {{ otp.scade_il|data }}.</p>{% endif %}
+
+{% if adesione.stato == StatoAdesione.DA_CONFERMARE %}
+<section class="pannello passo">
+  <h2>Conferma del cliente</h2>
+  <p>Far leggere al cliente la dichiarazione qui sotto. Se la accetta, inserisce il codice ricevuto via SMS.</p>
+  <form method="post" action="/studio/adesioni/{{ adesione.id }}/conferma">
+    {{ m.csrf() }}
+    <div class="riga">{{ m.campo("codice", "Codice ricevuto dal cliente", obbligatorio=true, attr='inputmode="numeric" autocomplete="off" pattern="[0-9]{6}" maxlength="6" autofocus') }}</div>
+    <div class="azioni"><button type="submit">Conferma l'adesione</button></div>
+  </form>
+  <form method="post" action="/studio/adesioni/{{ adesione.id }}/otp" class="in-linea">
+    {{ m.csrf() }}<button class="secondario" type="submit">Invia un nuovo codice</button>
+  </form>
+</section>
+{% elif adesione.stato == StatoAdesione.ATTIVA %}
+<p class="nota">Confermata il {{ adesione.confermata_il|data }}. Il cliente puo' firmare le deleghe allo sportello con un codice via SMS.</p>
+{% else %}
+<p class="nota">Revocata il {{ adesione.revocata_il|data }}.</p>
+{% endif %}
+
+<section class="pannello">
+  <h2>Dichiarazione di accettazione</h2>
+  <pre class="dichiarazione">{{ dichiarazione }}</pre>
+  <p class="nota">Versione delle condizioni {{ adesione.versione_condizioni }} · impronta SHA-256 <code>{{ adesione.dichiarazione_sha256 }}</code></p>
+</section>
+
+{% if adesione.stato != StatoAdesione.REVOCATA %}
+<form method="post" action="/studio/adesioni/{{ adesione.id }}/revoca" hx-confirm="Revocare l'adesione? Il cliente non potra' piu' firmare con l'OTP finche' non aderisce di nuovo.">
+  {{ m.csrf() }}<button class="pericolo" type="submit">Revoca l'adesione</button>
+</form>
+{% endif %}
+{% endblock %}

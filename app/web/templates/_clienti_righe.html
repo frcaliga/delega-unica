@@ -1,0 +1,10 @@
+{% for c in clienti %}
+<tr>
+  <td><a href="/studio/clienti/{{ c.id }}"><code>{{ c.codice_fiscale }}</code></a></td>
+  <td><a href="/studio/clienti/{{ c.id }}">{{ c.nominativo }}</a></td>
+  <td>{{ "Si'" if c.partita_iva_attiva else "No" }}</td>
+  <td>{{ c.email or "" }}{% if c.email and c.telefono %}<br>{% endif %}{{ c.telefono or "" }}</td>
+</tr>
+{% else %}
+<tr><td colspan="4" class="vuoto">{% if q %}Nessun cliente trovato per "{{ q }}".{% else %}Nessun cliente: aggiungere il primo con "Nuovo cliente".{% endif %}</td></tr>
+{% endfor %}

@@ -1,0 +1,36 @@
+{% import "_macro.html" as m with context %}
+<div id="fea-firma" class="fea">
+  <h3>Firma del cliente allo sportello</h3>
+  {% if delega.busta_cliente %}
+  <p>Il cliente ha firmato. Scaricare la busta, firmarla con la firma digitale dello studio (CAdES, .p7m) e caricare qui sotto il file controfirmato.</p>
+  <p><a class="bottone" href="/studio/deleghe/{{ delega.id }}/fea/busta-cliente" hx-boost="false" download>Scarica la busta firmata dal cliente</a></p>
+  {% elif not adesione %}
+  <p class="avviso errore">Il sottoscrittore non ha un'adesione attiva al servizio FEA. <a href="/studio/clienti/{{ cliente.id }}">Registrarla dalla scheda del cliente</a>.</p>
+  {% else %}
+  {{ m.errori(errori) if errori is defined }}
+  <ol>
+    <li>Mostrare al cliente il contenuto della delega.</li>
+    <li>Inviare il codice al cellulare {{ adesione.cellulare[:3] }}…{{ adesione.cellulare[-3:] }} e farlo inserire al cliente.</li>
+  </ol>
+  {% if xml %}
+  <details><summary>Contenuto del file XML da firmare</summary><pre class="xml">{{ xml }}</pre></details>
+  {% endif %}
+  {% if otp is defined and otp %}
+  <p class="avviso ok" role="status">Codice inviato a {{ otp.cellulare }}, valido fino alle {{ otp.scade_il|data }}.</p>
+  {% endif %}
+  <div class="azioni">
+    <form method="post" action="/studio/deleghe/{{ delega.id }}/fea/otp" class="in-linea"
+          hx-post="/studio/deleghe/{{ delega.id }}/fea/otp" hx-target="#fea-firma" hx-swap="outerHTML">
+      {{ m.csrf() }}<button class="secondario" type="submit">{% if otp is defined and otp %}Invia un nuovo codice{% else %}Invia il codice al cliente{% endif %}</button>
+    </form>
+  </div>
+  <form method="post" action="/studio/deleghe/{{ delega.id }}/fea/firma"
+        hx-post="/studio/deleghe/{{ delega.id }}/fea/firma" hx-target="#fea-firma" hx-swap="outerHTML">
+    {{ m.csrf() }}
+    <div class="riga">
+      {{ m.campo("codice", "Codice ricevuto dal cliente", obbligatorio=true, attr='inputmode="numeric" autocomplete="off" pattern="[0-9]{6}" maxlength="6"') }}
+    </div>
+    <button type="submit">Firma la delega</button>
+  </form>
+  {% endif %}
+</div>

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% import "_macro.html" as m with context %}
+{% set sezione = "deleghe" %}
+{% block titolo %}{{ TIPI_RICHIESTA[tipo] }} · {{ cliente.nominativo }}{% endblock %}
+{% block contenuto %}
+<p class="briciole"><a href="/studio/clienti">Clienti</a> / <a href="/studio/clienti/{{ cliente.id }}">{{ cliente.nominativo }}</a> /</p>
+<h1>{% if tipo == TipoRichiesta.CONFERIMENTO %}Nuovo conferimento{% elif tipo == TipoRichiesta.REVOCA %}Revoca della delega{% else %}Rinnovo della delega{% endif %}</h1>
+{% if tipo != TipoRichiesta.CONFERIMENTO and origine %}
+<p class="sottotitolo">Delega attiva dal {{ origine.data_conferimento|data }}, in scadenza il {{ origine.data_scadenza|data }}.{% if tipo == TipoRichiesta.RINNOVO %} Il rinnovo conserva gli stessi servizi.{% endif %}</p>
+{% endif %}
+<section class="pannello">
+  {{ m.errori(errori) }}
+  <form method="post" action="/studio/clienti/{{ cliente.id }}/deleghe/nuova">
+    {{ m.csrf() }}
+    <input type="hidden" name="tipo_richiesta" value="{{ tipo.value }}">
+    {% if dati.delega_origine_id %}<input type="hidden" name="delega_origine_id" value="{{ dati.delega_origine_id }}">{% endif %}
+
+    {% if tipo == TipoRichiesta.CONFERIMENTO %}
+    <fieldset>
+      <legend>Servizi delegati</legend>
+      {% for codice, descrizione in SERVIZI.items() %}
+      <label class="spunta"><input type="checkbox" name="servizi" value="{{ codice }}" {% if codice in dati.servizi %}checked{% endif %}> {{ descrizione }}</label>
+      {% endfor %}
+    </fieldset>
+    {% endif %}
+
+    {% set sott = dati.sottoscrittore or {} %}
+    <fieldset>
+      <legend>Chi firma</legend>
+      {% if cliente.persona_fisica %}
+      <p class="nota">Lasciare vuoto se firma il cliente stesso. Compilare per tutore, genitore, erede o curatore.</p>
+      {% else %}
+      <p class="nota">Per una societa' o un ente firma il rappresentante legale.</p>
+      {% endif %}
+      <div class="riga">
+        {{ m.campo("sott_codice_fiscale", "Codice fiscale", sott.codice_fiscale, obbligatorio=not cliente.persona_fisica, attr='maxlength="16" class="maiuscolo"') }}
+        {{ m.scelta("sott_qualifica", "Qualifica", QUALIFICHE, sott.qualifica or ("4" if not cliente.persona_fisica else "2")) }}
+      </div>
+      <div class="riga">
+        {{ m.campo("sott_cognome", "Cognome", sott.cognome, obbligatorio=not cliente.persona_fisica) }}
+        {{ m.campo("sott_nome", "Nome", sott.nome, obbligatorio=not cliente.persona_fisica) }}
+      </div>
+    </fieldset>
+
+    {% set doc = dati.documento or {} %}
+    <fieldset>
+      <legend>Documento d'identita' di chi firma</legend>
+      <p class="nota">Richiesto per annotare la delega nel registro.{% if adesione %} Proposto il documento verificato all'adesione FEA.{% endif %}</p>
+      <div class="riga">
+        {{ m.scelta("doc_tipo", "Documento", TIPI_DOCUMENTO, doc.tipo or "1") }}
+        {{ m.campo("doc_numero", "Numero", doc.numero, attr='maxlength="30"') }}
+      </div>
+      <div class="riga">
+        {{ m.campo("doc_rilasciato_da", "Rilasciato da", doc.rilasciato_da, attr='maxlength="100"') }}
+        {{ m.campo("doc_scadenza", "Scadenza", doc.scadenza, tipo="date") }}
+      </div>
+      {{ m.campo("doc_tipo_altro", "Tipo di documento (se \"Altro\")", doc.tipo_altro, attr='maxlength="100"') }}
+    </fieldset>
+
+    <fieldset>
+      <legend>Firma</legend>
+      <div class="riga">
+        <label class="campo"><span>Modalita' di firma <abbr title="obbligatorio">*</abbr></span>
+          <select name="modalita_firma" required>
+            {% for mod in modalita %}
+            <option value="{{ mod.value }}" {% if dati.modalita_firma == mod.value or (not dati.modalita_firma and adesione and mod == ModalitaFirma.FEA_NON_QUALIFICATA) %}selected{% endif %}>{{ MODALITA_FIRMA[mod] }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {{ m.campo("data_firma", "Data di firma", dati.data_firma, tipo="date", obbligatorio=true) }}
+      </div>
+      {{ m.campo("luogo_firma", "Luogo di firma", dati.luogo_firma, attr='maxlength="100"') }}
+      {% if not adesione and cliente.persona_fisica and not cliente.partita_iva_attiva %}
+      <p class="nota">Per la FEA allo sportello il cliente deve prima aderire dalla sua scheda.</p>
+      {% endif %}
+    </fieldset>
+
+    <div class="azioni"><button type="submit">Crea la delega</button><a href="/studio/clienti/{{ cliente.id }}">Annulla</a></div>
+  </form>
+</section>
+{% endblock %}

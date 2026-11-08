@@ -71,6 +71,28 @@ Fase 0, fondamenta:
 - Autenticazione con password (Argon2) e secondo fattore TOTP obbligatorio per usare le API
 - Audit log di accessi e operazioni, in sola aggiunta (un trigger PostgreSQL rifiuta UPDATE e DELETE)
 
+## Interfaccia web dello studio
+
+Le pagine per gli operatori sono servite dalla stessa applicazione su `/studio` (codice in
+`app/web`): template Jinja2 resi dal server e [HTMX](https://htmx.org) per le parti dinamiche,
+senza un frontend separato. Ogni pagina richiama le stesse funzioni delle API, quindi regole,
+controlli e audit log restano in un solo posto.
+
+- Accesso con password e codice TOTP; al primo accesso la pagina mostra il QR da inquadrare
+- Sessione in un cookie `HttpOnly`, `Secure`, `SameSite=Strict` che scade dopo
+  `ACCESS_TOKEN_MINUTES` di inattivita'; token CSRF su ogni modulo; Content Security Policy
+  senza script in linea
+- Cruscotto con le deleghe da completare e quelle in scadenza
+- Clienti: ricerca, scheda, anagrafica, adesione alla FEA con identificazione di persona
+- Deleghe: conferimento, revoca e rinnovo, file XML, caricamento del `.p7m`, invio ed esito,
+  fornitura massiva
+- FEA allo sportello: codice via SMS al cliente, firma, busta da controfirmare
+- Registro cronologico con filtro per date, verifica della catena di hash ed export CSV
+  (amministratore e responsabile delle deleghe)
+- Studio: dati dell'intermediario e utenti
+
+HTMX 2.0.4 e' incluso in `app/web/static` (nessuna risorsa da CDN esterni).
+
 ## Sviluppo locale
 
 Requisiti: Python 3.12+, [uv](https://docs.astral.sh/uv/), PostgreSQL 16 (o Docker).
@@ -86,7 +108,8 @@ uv run python -m app.cli create-tenant \
 uv run uvicorn app.main:app --reload
 ```
 
-Documentazione delle API su http://localhost:8000/docs.
+Interfaccia web su http://localhost:8000/studio, documentazione delle API su
+http://localhost:8000/docs.
 
 ### Flusso di accesso
 

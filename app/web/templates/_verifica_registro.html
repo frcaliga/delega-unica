@@ -1,0 +1,5 @@
+{% if esito.integro %}
+<p class="avviso ok" role="status">Registro integro: {{ esito.voci_controllate }} voci controllate, catena di hash corretta.</p>
+{% else %}
+<p class="avviso errore" role="alert">Registro alterato: {{ esito.primo_errore }}</p>
+{% endif %}

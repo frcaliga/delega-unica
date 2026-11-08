@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% import "_macro.html" as m with context %}
+{% block titolo %}Accesso{% endblock %}
+{% block classe_main %}accesso{% endblock %}
+{% block contenuto %}
+<section class="pannello stretto">
+  <h1>Delega Unica</h1>
+  <p class="nota">Accesso riservato agli operatori dello studio.</p>
+  {{ m.errori(errori) }}
+  <form method="post" action="/studio/accesso">
+    {{ m.csrf() }}
+    {{ m.campo("email", "Email", email, tipo="email", obbligatorio=true, attr='autocomplete="username" autofocus') }}
+    {{ m.campo("password", "Password", tipo="password", obbligatorio=true, attr='autocomplete="current-password"') }}
+    <button type="submit">Accedi</button>
+  </form>
+</section>
+{% endblock %}

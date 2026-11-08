@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% set sezione = "clienti" %}
+{% block titolo %}Clienti{% endblock %}
+{% block contenuto %}
+<div class="titolo-azioni">
+  <h1>Clienti</h1>
+  <a class="bottone" href="/studio/clienti/nuovo">Nuovo cliente</a>
+</div>
+<form class="ricerca" method="get" action="/studio/clienti" role="search">
+  <input type="search" name="q" value="{{ q }}" placeholder="Cerca per codice fiscale, cognome, nome o denominazione"
+         aria-label="Cerca cliente" autocomplete="off"
+         hx-get="/studio/clienti" hx-trigger="input changed delay:300ms, search" hx-target="#elenco-clienti" hx-push-url="true">
+</form>
+<section class="pannello">
+  <table>
+    <thead><tr><th>Codice fiscale</th><th>Nominativo</th><th>P.IVA attiva</th><th>Contatti</th></tr></thead>
+    <tbody id="elenco-clienti">{% include "_clienti_righe.html" %}</tbody>
+  </table>
+</section>
+{% endblock %}

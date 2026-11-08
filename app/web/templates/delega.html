@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% import "_macro.html" as m with context %}
+{% set sezione = "deleghe" %}
+{% set id = delega.id %}
+{% block titolo %}{{ TIPI_RICHIESTA[delega.tipo_richiesta] }} · {{ cliente.nominativo }}{% endblock %}
+{% block contenuto %}
+<p class="briciole"><a href="/studio/clienti">Clienti</a> / <a href="/studio/clienti/{{ cliente.id }}">{{ cliente.nominativo }}</a> /</p>
+<div class="titolo-azioni">
+  <div>
+    <h1>{{ TIPI_RICHIESTA[delega.tipo_richiesta] }} {{ m.stato(delega.stato) }}</h1>
+    <p class="sottotitolo">{{ cliente.nominativo }} · <code>{{ cliente.codice_fiscale }}</code> · creata il {{ delega.created_at|data }}</p>
+  </div>
+</div>
+
+{{ m.errori(errori) }}
+
+{% if esito %}
+<div class="avviso ok" role="status">
+  <p>Firma verificata: delega annotata nel registro al numero <strong>{{ esito.numero_registro }}</strong>.</p>
+  {% if esito.avvisi %}<ul>{% for a in esito.avvisi %}<li>{{ a }}</li>{% endfor %}</ul>{% endif %}
+</div>
+{% endif %}
+
+<section class="pannello passo">
+  <h2>Prossimo passo</h2>
+  {% if delega.stato == StatoDelega.BOZZA %}
+  <p>Generare il file XML: viene controllato sulle specifiche dell'Agenzia e la delega passa in firma.</p>
+  <form method="post" action="/studio/deleghe/{{ id }}/xml">{{ m.csrf() }}<button type="submit">Genera il file XML</button></form>
+
+  {% elif delega.stato == StatoDelega.IN_FIRMA %}
+  <div class="azioni">
+    <a class="bottone secondario" href="/studio/deleghe/{{ id }}/xml" hx-boost="false" download>Scarica il file XML</a>
+    {% if not delega.busta_cliente %}
+    <form method="post" action="/studio/deleghe/{{ id }}/xml" class="in-linea">{{ m.csrf() }}<button class="secondario" type="submit">Rigenera il file XML</button></form>
+    {% endif %}
+  </div>
+  {% if delega.modalita_firma == ModalitaFirma.FEA_NON_QUALIFICATA %}
+  {% include "_fea_firma.html" %}
+  {% else %}
+  <p>Far firmare il file XML al {{ "cliente" if delega.qualifica.value == "1" else "sottoscrittore" }} con {{ MODALITA_FIRMA[delega.modalita_firma]|lower }} in formato CAdES (.p7m), poi caricarlo qui sotto.</p>
+  {% endif %}
+  <form method="post" action="/studio/deleghe/{{ id }}/firmato" enctype="multipart/form-data" class="caricamento">
+    {{ m.csrf() }}
+    <label class="campo"><span>{% if delega.modalita_firma == ModalitaFirma.FEA_NON_QUALIFICATA %}Busta controfirmata dallo studio (.p7m){% else %}File firmato (.p7m){% endif %}</span>
+      <input type="file" name="file" accept=".p7m,application/pkcs7-mime" required></label>
+    <button type="submit">Verifica e annota nel registro</button>
+  </form>
+
+  {% elif delega.stato == StatoDelega.FIRMATA %}
+  <p>Trasmettere il file firmato all'Agenzia delle Entrate dall'area riservata (invio puntuale) o con una fornitura massiva, poi segnare l'invio.</p>
+  <div class="azioni">
+    <a class="bottone secondario" href="/studio/deleghe/{{ id }}/firmato" hx-boost="false" download>Scarica il file firmato</a>
+    <form method="post" action="/studio/deleghe/{{ id }}/invio" class="in-linea">{{ m.csrf() }}<button type="submit">Segna come inviata</button></form>
+  </div>
+
+  {% elif delega.stato == StatoDelega.INVIATA %}
+  <p>Riportare l'esito della ricevuta dell'Agenzia delle Entrate.</p>
+  <form method="post" action="/studio/deleghe/{{ id }}/esito">
+    {{ m.csrf() }}
+    <div class="riga">
+      <label class="campo"><span>Esito</span>
+        <select name="esito"><option value="accettata">Accettata</option><option value="scartata">Scartata</option></select></label>
+      {{ m.campo("data", "Data della ricevuta", oggi.isoformat(), tipo="date", obbligatorio=true) }}
+    </div>
+    {{ m.campo("motivo", "Motivo dello scarto", aiuto="Solo se scartata: riportare il motivo indicato nella ricevuta") }}
+    <button type="submit">Registra l'esito</button>
+  </form>
+
+  {% elif delega.stato == StatoDelega.ATTIVA %}
+  <p>Delega in vigore fino al <strong>{{ delega.data_scadenza|data }}</strong>.
+    {% if rinnovabile %}E' possibile rinnovarla.{% elif inizio_rinnovo and inizio_rinnovo > oggi %}Si potra' rinnovare dal {{ inizio_rinnovo|data }}.{% endif %}</p>
+  <div class="azioni">
+    {% if rinnovabile %}<a class="bottone" href="/studio/clienti/{{ cliente.id }}/deleghe/nuova?tipo=3&amp;origine={{ id }}">Rinnova</a>{% endif %}
+    <a class="bottone secondario" href="/studio/clienti/{{ cliente.id }}/deleghe/nuova?tipo=2&amp;origine={{ id }}">Revoca</a>
+  </div>
+  {% elif delega.stato == StatoDelega.SCARTATA %}
+  <p>Scartata dall'Agenzia{% if delega.esito_motivo %}: {{ delega.esito_motivo }}{% endif %}.</p>
+  <p><a class="bottone" href="/studio/clienti/{{ cliente.id }}">Torna al cliente</a></p>
+  {% else %}
+  <p>Nessuna azione: la delega e' {{ STATI[delega.stato]|lower }}.</p>
+  {% endif %}
+  {% if documento and delega.stato != StatoDelega.FIRMATA %}
+  <p><a href="/studio/deleghe/{{ id }}/firmato" hx-boost="false" download>Scarica il file firmato</a></p>
+  {% endif %}
+</section>
+
+<section class="pannello">
+  <h2>Dati della delega</h2>
+  <dl class="dati">
+    <dt>Delegante</dt><dd>{{ cliente.nominativo }} (<code>{{ cliente.codice_fiscale }}</code>)</dd>
+    <dt>Sottoscrittore</dt><dd>{{ delega.sottoscrittore_cognome }} {{ delega.sottoscrittore_nome }} (<code>{{ delega.sottoscrittore_cf }}</code>), {{ QUALIFICHE[delega.qualifica]|lower }}</dd>
+    {% if delega.servizi %}
+    <dt>Servizi</dt><dd><ul>{% for s in delega.servizi %}<li>{{ SERVIZI.get(s, s) }}</li>{% endfor %}</ul></dd>
+    {% endif %}
+    {% if delega.delega_origine_id %}
+    <dt>Delega di riferimento</dt><dd><a href="/studio/deleghe/{{ delega.delega_origine_id }}">Apri</a></dd>
+    {% endif %}
+    <dt>Documento</dt><dd>{% if delega.documento_tipo %}{{ delega.documento_tipo_altro or TIPI_DOCUMENTO[delega.documento_tipo] }} n. {{ delega.documento_numero }}, rilasciato da {{ delega.documento_rilasciato_da }}, scadenza {{ delega.documento_scadenza|data }}{% else %}non indicato{% endif %}</dd>
+    <dt>Firma</dt><dd>{{ MODALITA_FIRMA.get(delega.modalita_firma, delega.modalita_firma) }}, il {{ delega.data_firma|data }}{% if delega.luogo_firma %} a {{ delega.luogo_firma }}{% endif %}</dd>
+    {% if delega.data_conferimento %}<dt>Conferimento</dt><dd>{{ delega.data_conferimento|data }}</dd>{% endif %}
+    {% if delega.data_scadenza %}<dt>Scadenza</dt><dd>{{ delega.data_scadenza|data }}</dd>{% endif %}
+    {% if voce %}<dt>Registro</dt><dd>Voce n. <a href="/studio/registro">{{ voce.numero }}</a> del {{ voce.data|data }}</dd>{% endif %}
+    {% if documento %}
+    <dt>Firmatari</dt><dd><ul>{% for livello in documento.firmatari %}{% for f in livello.firmatari %}<li>{{ f.nome }} (<code>{{ f.codice_fiscale }}</code>){% if f.qualificato %}, firma qualificata{% endif %}{% if livello.livello > 1 %}, firma interna{% endif %}</li>{% endfor %}{% endfor %}</ul></dd>
+    {% endif %}
+    {% if evidenza %}<dt>FEA del cliente</dt><dd>Firmata il {{ evidenza.ora_firma|data }}, certificato {{ evidenza.seriale_certificato }}</dd>{% endif %}
+  </dl>
+  {% if collegate %}
+  <h3>Comunicazioni successive</h3>
+  <ul>{% for c in collegate %}<li><a href="/studio/deleghe/{{ c.id }}">{{ TIPI_RICHIESTA[c.tipo_richiesta] }}</a> {{ m.stato(c.stato) }}</li>{% endfor %}</ul>
+  {% endif %}
+</section>
+{% endblock %}
