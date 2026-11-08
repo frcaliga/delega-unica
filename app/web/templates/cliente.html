@@ -38,6 +38,54 @@
 </section>
 
 <section class="pannello">
+  <h2>Documenti d'identita'</h2>
+  {% if not cliente.persona_fisica %}
+  <p class="nota">I documenti d'identita' si archiviano solo per le persone fisiche.</p>
+  {% else %}
+  {% if documenti %}
+  <table>
+    <thead><tr><th>Documento</th><th>Scadenza</th><th>Lettura</th><th>Caricato</th><th></th></tr></thead>
+    <tbody>
+    {% for doc in documenti %}
+    <tr>
+      <td>{{ TIPI_DOCUMENTO[doc.tipo] }} {{ doc.numero or "" }}{% if doc.rilasciato_da %}<br><small>{{ doc.rilasciato_da }}</small>{% endif %}</td>
+      <td>{{ doc.scadenza|data }}{% if doc.scaduto(oggi) %} <span class="stato documento-scaduto">Scaduto</span>{% endif %}</td>
+      <td>{% if doc.lettura.get("letta") %}Automatica{% if doc.lettura.get("discordanze") %}, con differenze{% endif %}{% else %}Manuale{% endif %}</td>
+      <td>{{ doc.created_at|data }}</td>
+      <td class="azioni-riga">
+        <a class="bottone secondario" href="/studio/documenti/{{ doc.id }}/copia" hx-boost="false" download>Scarica</a>
+        <form method="post" action="/studio/documenti/{{ doc.id }}/elimina" class="in-linea" hx-confirm="Eliminare la copia del documento? Le copie gia' usate per un'adesione FEA restano nell'adesione.">
+          {{ m.csrf() }}<button class="pericolo" type="submit">Elimina</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="nota">Nessun documento archiviato.</p>
+  {% endif %}
+  <details {% if errori_documento %}open{% endif %}>
+    <summary>Carica un documento</summary>
+    {{ m.errori(errori_documento) }}
+    <form method="post" action="/studio/clienti/{{ cliente.id }}/documenti" enctype="multipart/form-data">
+      {{ m.csrf() }}
+      <div class="caricamento">
+        <label class="campo"><span>Copia del documento <abbr title="obbligatorio">*</abbr></span>
+          <input type="file" name="copia" accept="application/pdf,image/jpeg,image/png" required>
+          <small>Retro della CIE o pagina dati del passaporto per la lettura automatica. PDF, JPEG o PNG, fino a 10 MB.</small></label>
+        <button type="button" class="secondario" hx-post="/studio/clienti/{{ cliente.id }}/documenti/leggi" hx-encoding="multipart/form-data" hx-include="closest form" hx-target="#campi-documento" hx-swap="outerHTML">Leggi i dati</button>
+      </div>
+      {% set errori = none %}{% set proposta = none %}
+      {% include "_documento_campi.html" %}
+      <p class="nota">La copia e' conservata cifrata e si puo' eliminare quando non serve piu'.</p>
+      <div class="azioni"><button type="submit">Salva il documento</button></div>
+    </form>
+  </details>
+  {% endif %}
+</section>
+
+<section class="pannello">
   <h2>FEA allo sportello</h2>
   {% if not fea_ammessa %}
   <p class="nota">La FEA con OTP e' ammessa solo per persone fisiche senza partita IVA. Questo cliente firma con firma digitale o con FEA CIE.</p>
@@ -75,9 +123,20 @@
       </div>
       <div class="riga">
         {{ m.campo("cellulare", "Cellulare del cliente", dati_adesione.get("cellulare", cliente.telefono), tipo="tel", obbligatorio=true) }}
+        {% if archiviato %}
+        <label class="campo"><span>Copia del documento</span>
+          <select name="documento_identita_id">
+            <option value="{{ archiviato.id }}" {% if dati_adesione.get("documento_identita_id") == archiviato.id|string %}selected{% endif %}>Copia archiviata: {{ TIPI_DOCUMENTO[archiviato.tipo] }} {{ archiviato.numero }}</option>
+            <option value="" {% if not dati_adesione.get("documento_identita_id") %}selected{% endif %}>Allego un nuovo file</option>
+          </select></label>
+        <label class="campo"><span>Nuovo file</span>
+          <input type="file" name="copia_documento" accept="application/pdf,image/jpeg,image/png">
+          <small>Solo se il cliente esibisce un documento diverso da quello archiviato</small></label>
+        {% else %}
         <label class="campo"><span>Copia del documento <abbr title="obbligatorio">*</abbr></span>
           <input type="file" name="copia_documento" accept="application/pdf,image/jpeg,image/png" required>
           <small>PDF, JPEG o PNG, fino a 10 MB</small></label>
+        {% endif %}
       </div>
       <div class="azioni"><button type="submit">Registra e invia il codice</button></div>
     </form>

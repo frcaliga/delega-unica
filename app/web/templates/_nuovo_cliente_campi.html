@@ -1,0 +1,20 @@
+{# Anagrafica ed estremi del documento del nuovo cliente: si sostituisce con HTMX dopo la lettura #}
+{% import "_macro.html" as m with context %}
+<div id="campi-nuovo-cliente">
+  {{ m.errori(errori) }}
+  {% include "_proposta.html" %}
+  {% set nuovo = true %}{% set cliente = none %}
+  {% include "_anagrafica.html" %}
+  <fieldset class="gruppo">
+    <legend>Documento d'identita' (persone fisiche)</legend>
+    <div class="riga">
+      {{ m.scelta("documento_tipo", "Documento", TIPI_DOCUMENTO, dati.get("documento_tipo") or "1") }}
+      {{ m.campo("documento_numero", "Numero", dati.get("documento_numero"), attr='maxlength="30" class="maiuscolo"') }}
+    </div>
+    <div class="riga">
+      {{ m.campo("documento_rilasciato_da", "Rilasciato da", dati.get("documento_rilasciato_da"), attr='maxlength="100"') }}
+      {{ m.campo("documento_scadenza", "Scadenza", dati.get("documento_scadenza"), tipo="date") }}
+    </div>
+    <p class="nota">Gli estremi si salvano con la copia del documento, se scelta sopra.</p>
+  </fieldset>
+</div>

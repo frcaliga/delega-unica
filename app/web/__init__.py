@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import get_settings
-from app.web import auth, clienti, deleghe, fea, registro
+from app.web import auth, clienti, deleghe, documenti, fea, registro
 from app.web.base import CARTELLA, is_htmx, pagina
 from app.web.sessione import (
     COOKIE_CSRF,
@@ -39,7 +39,7 @@ def _nella_web(request: Request) -> bool:
 
 
 def installa(app: FastAPI) -> None:
-    for modulo in (auth, deleghe, clienti, fea, registro):
+    for modulo in (auth, deleghe, documenti, clienti, fea, registro):
         app.include_router(
             modulo.router,
             prefix=PREFISSO,

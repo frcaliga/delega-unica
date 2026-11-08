@@ -6,11 +6,15 @@
 <p class="briciole"><a href="/studio/clienti">Clienti</a> /</p>
 <h1>Nuovo cliente</h1>
 <section class="pannello">
-  {{ m.errori(errori) }}
-  <form method="post" action="/studio/clienti/nuovo">
+  <form method="post" action="/studio/clienti/nuovo" enctype="multipart/form-data">
     {{ m.csrf() }}
-    {% set nuovo = true %}{% set cliente = none %}
-    {% include "_anagrafica.html" %}
+    <div class="caricamento">
+      <label class="campo"><span>Carta d'identita' o passaporto (facoltativo)</span>
+        <input type="file" name="copia" accept="application/pdf,image/jpeg,image/png">
+        <small>Persone fisiche: foto o scansione del retro della CIE o della pagina dati del passaporto. PDF, JPEG o PNG, fino a 10 MB. La copia viene conservata cifrata.</small></label>
+      <button type="button" class="secondario" hx-post="/studio/clienti/nuovo/leggi" hx-encoding="multipart/form-data" hx-include="closest form" hx-target="#campi-nuovo-cliente" hx-swap="outerHTML">Leggi i dati dal documento</button>
+    </div>
+    {% include "_nuovo_cliente_campi.html" %}
     <div class="azioni"><button type="submit">Salva cliente</button><a href="/studio/clienti">Annulla</a></div>
   </form>
 </section>

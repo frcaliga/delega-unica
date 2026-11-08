@@ -83,6 +83,12 @@ data "aws_iam_policy_document" "task" {
   }
 
   statement {
+    # Copie cifrate dei documenti d'identita'
+    actions   = ["kms:GenerateDataKey", "kms:Decrypt"]
+    resources = [aws_kms_key.documenti.arn]
+  }
+
+  statement {
     # RDS ruota la password del database: l'applicazione la rilegge quando cambia
     actions   = ["secretsmanager:GetSecretValue"]
     resources = [local.segreto_db]
@@ -149,6 +155,7 @@ resource "aws_ecs_task_definition" "applicazione" {
         { name = "REQUIRE_MFA", value = "true" },
         { name = "AWS_REGION", value = var.regione },
         { name = "FEA_CA_KMS_KEY_ID", value = aws_kms_key.ca_fea.arn },
+        { name = "DOCUMENTI_KMS_KEY_ID", value = aws_kms_key.documenti.arn },
         { name = "SMS_PROVIDER", value = "sns" },
         { name = "SMS_MITTENTE", value = var.sms_mittente },
       ]

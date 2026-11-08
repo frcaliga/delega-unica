@@ -33,8 +33,10 @@ from app.models import (
 )
 from app.routers.clienti import get_cliente
 from app.routers.deleghe import _errori, _get_delega, _richiedi_stato
+from app.routers.documenti_identita import copia_in_chiaro, get_documento
 from app.schemas.fea import AdesioneOut, CodiceIn, FirmaFeaOut, OtpInviatoOut
 from app.services import ca_fea, fea, otp, sms
+from app.services.cifratura import Portachiavi, get_portachiavi
 
 router = APIRouter(tags=["fea"])
 
@@ -101,7 +103,10 @@ def adesione_attiva(db: Session, tenant_id: uuid.UUID, cf: str) -> AdesioneFea |
 async def crea_adesione(
     cliente_id: uuid.UUID,
     request: Request,
-    copia_documento: UploadFile,
+    copia_documento: UploadFile | None = None,
+    documento_identita_id: uuid.UUID | None = Form(
+        None, description="In alternativa alla copia: documento gia' archiviato del cliente"
+    ),
     documento_tipo: TipoDocumento = Form(),
     documento_numero: str = Form(min_length=1, max_length=30),
     documento_rilasciato_da: str = Form(min_length=1, max_length=100),
@@ -110,6 +115,7 @@ async def crea_adesione(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     invio: sms.InvioSms = Depends(sms.get_sms),
+    portachiavi: Portachiavi = Depends(get_portachiavi),
 ) -> AdesioneFea:
     """Identificazione di persona: registra il documento esibito e invia l'OTP di conferma."""
     cliente = get_cliente(db, user, cliente_id)
@@ -124,11 +130,24 @@ async def crea_adesione(
     cellulare = re.sub(r"[\s.-]", "", cellulare)
     if not CELLULARE.match(cellulare):
         errori.append("Numero di cellulare non valido")
-    if copia_documento.content_type not in TIPI_COPIA:
-        errori.append("La copia del documento deve essere PDF, JPEG o PNG")
-    copia = await copia_documento.read(MAX_COPIA_DOCUMENTO + 1)
-    if not copia or len(copia) > MAX_COPIA_DOCUMENTO:
-        errori.append("La copia del documento deve essere tra 1 byte e 10 MB")
+    copia, copia_tipo = b"", ""
+    if copia_documento is not None and copia_documento.filename:
+        copia_tipo = copia_documento.content_type or ""
+        if copia_tipo not in TIPI_COPIA:
+            errori.append("La copia del documento deve essere PDF, JPEG o PNG")
+        copia = await copia_documento.read(MAX_COPIA_DOCUMENTO + 1)
+        if not copia or len(copia) > MAX_COPIA_DOCUMENTO:
+            errori.append("La copia del documento deve essere tra 1 byte e 10 MB")
+    elif documento_identita_id is not None:
+        # La copia archiviata del cliente diventa evidenza dell'adesione (conservata 20 anni)
+        archiviato = get_documento(db, user, documento_identita_id)
+        if archiviato.cliente_id != cliente.id:
+            errori.append("Il documento archiviato non e' di questo cliente")
+        else:
+            copia = copia_in_chiaro(db, request, user, archiviato, portachiavi, "adesione FEA")
+            copia_tipo = archiviato.copia_tipo
+    else:
+        errori.append("Allegare la copia del documento esibito")
     if errori:
         raise _errori(errori)
 
@@ -145,7 +164,7 @@ async def crea_adesione(
         documento_rilasciato_da=documento_rilasciato_da.strip(),
         documento_scadenza=documento_scadenza,
         copia_documento=copia,
-        copia_documento_tipo=copia_documento.content_type,
+        copia_documento_tipo=copia_tipo,
         copia_documento_sha256=fea.sha256(copia),
         cellulare=cellulare,
         versione_condizioni=fea.VERSIONE_CONDIZIONI,

@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -13,13 +13,25 @@ from app.db import get_db
 from app.domain import regole
 from app.models import AdesioneFea, Cliente, Delega, StatoDelega, User
 from app.routers import clienti as api
-from app.schemas.deleghe import ClienteIn, ClienteUpdate
+from app.routers import documenti_identita as api_documenti
+from app.schemas.deleghe import ClienteUpdate
+from app.services.cifratura import Portachiavi, get_portachiavi
 from app.web.base import errori_da, htmx_target, pagina, vai, vuoto_a_none
 from app.web.sessione import utente_web
 
 router = APIRouter()
 
-CAMPI = ("codice_fiscale", "cognome", "nome", "denominazione", "email", "telefono")
+CAMPI = (
+    "codice_fiscale",
+    "cognome",
+    "nome",
+    "denominazione",
+    "email",
+    "telefono",
+    "data_nascita",
+    "sesso",
+)
+CAMPI_PERSONA_FISICA = ("cognome", "nome", "data_nascita", "sesso")
 
 
 def dati_modulo(form) -> dict:
@@ -49,16 +61,21 @@ def nuovo(request: Request, user: User = Depends(utente_web)) -> Response:
 
 @router.post("/clienti/nuovo", response_class=HTMLResponse)
 async def crea(
-    request: Request, user: User = Depends(utente_web), db: Session = Depends(get_db)
+    request: Request,
+    copia: UploadFile | None = None,
+    user: User = Depends(utente_web),
+    db: Session = Depends(get_db),
+    portachiavi: Portachiavi = Depends(get_portachiavi),
 ) -> Response:
-    dati = dati_modulo(await request.form())
-    try:
-        cliente = api.create_cliente(ClienteIn(**dati), request=request, user=user, db=db)
-    except (ValidationError, HTTPException) as exc:
+    from app.web.documenti import crea_con_documento
+
+    form = await request.form()
+    cliente, dati, errori = await crea_con_documento(request, db, user, form, copia, portachiavi)
+    if cliente is None:
         return pagina(
             request,
             "cliente_nuovo.html",
-            {"dati": dati, "errori": errori_da(exc)},
+            {"dati": dati, "errori": errori},
             user=user,
             status_code=422,
         )
@@ -83,15 +100,29 @@ def contesto_scheda(db: Session, user: User, cliente: Cliente) -> dict:
     rinnovabili = {
         d.id for d in attive if d.data_scadenza and regole.rinnovo_consentito(d.data_scadenza, oggi)
     }
+    archiviato = api_documenti.documento_valido(db, cliente)
+    dati_adesione = {}
+    if archiviato is not None:
+        dati_adesione = {
+            "documento_tipo": archiviato.tipo.value,
+            "documento_numero": archiviato.numero,
+            "documento_rilasciato_da": archiviato.rilasciato_da,
+            "documento_scadenza": archiviato.scadenza.isoformat() if archiviato.scadenza else None,
+            "documento_identita_id": str(archiviato.id),
+        }
     return {
         "cliente": cliente,
         "deleghe": deleghe,
+        "documenti": api_documenti.documenti_cliente(db, cliente),
+        "archiviato": archiviato,
+        "oggi": oggi,
         "attive": attive,
         "rinnovabili": rinnovabili,
         "adesioni": adesioni,
         "fea_ammessa": cliente.persona_fisica and not cliente.partita_iva_attiva,
         "dati": {},
-        "dati_adesione": {},
+        "dati_adesione": dati_adesione,
+        "dati_documento": {},
     }
 
 
@@ -119,8 +150,8 @@ async def aggiorna(
     if cliente.persona_fisica:
         dati.pop("denominazione")
     else:
-        dati.pop("cognome")
-        dati.pop("nome")
+        for campo in CAMPI_PERSONA_FISICA:
+            dati.pop(campo)
     try:
         if cliente.persona_fisica and not (dati["cognome"] and dati["nome"]):
             raise HTTPException(422, detail="Per una persona fisica servono cognome e nome")

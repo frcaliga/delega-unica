@@ -63,6 +63,14 @@ STATI_ADESIONE = {
     StatoAdesione.ATTIVA: "Attiva",
     StatoAdesione.REVOCATA: "Revocata",
 }
+SESSI = {"M": "Maschile", "F": "Femminile"}
+# Campi della zona a lettura ottica con la cifra di controllo errata
+CAMPI_MRZ = {
+    "numero_documento": "numero del documento",
+    "data_nascita": "data di nascita",
+    "data_scadenza": "data di scadenza",
+    "composito": "controllo complessivo",
+}
 RUOLI = {
     Role.ADMIN: "Amministratore",
     Role.RESPONSABILE_DELEGHE: "Responsabile deleghe",
@@ -72,6 +80,8 @@ SERVIZI = {s.value: DESCRIZIONE_SERVIZI[s] for s in Servizio}
 # Messaggi di conferma dopo un reindirizzamento: la pagina riceve solo la chiave
 AVVISI = {
     "cliente": "Cliente salvato.",
+    "documento": "Documento d'identita' archiviato (copia cifrata).",
+    "documento_eliminato": "Copia del documento d'identita' eliminata.",
     "delega": "Delega creata in bozza.",
     "xml": "File XML generato: la delega e' in firma.",
     "fea": "Il cliente ha firmato: ora controfirmare la busta con la firma digitale dello studio.",
@@ -82,6 +92,20 @@ AVVISI = {
     "studio": "Dati dello studio aggiornati.",
     "utente": "Utente creato: al primo accesso configurera' il secondo fattore.",
 }
+
+
+def avvisi_lettura(proposta) -> list[str]:
+    """Messaggi per l'operatore sull'esito della lettura del documento."""
+    avvisi = list(proposta.avvisi)
+    if proposta.campi_incerti:
+        campi = ", ".join(CAMPI_MRZ.get(c, c) for c in proposta.campi_incerti)
+        avvisi.append(f"Cifre di controllo errate per: {campi}. Compilare questi campi a mano.")
+    if proposta.discordanze:
+        avvisi.append(
+            f"Non tornano con il codice fiscale: {', '.join(proposta.discordanze)}. "
+            "Verificare il documento e l'anagrafica."
+        )
+    return avvisi
 
 
 def data_it(valore: date | datetime | None) -> str:
@@ -101,6 +125,8 @@ templates.env.globals.update(
     TIPI_DOCUMENTO=TIPI_DOCUMENTO,
     STATI_ADESIONE=STATI_ADESIONE,
     RUOLI=RUOLI,
+    SESSI=SESSI,
+    avvisi_lettura=avvisi_lettura,
     SERVIZI=SERVIZI,
     Role=Role,
     StatoDelega=StatoDelega,

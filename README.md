@@ -32,6 +32,30 @@ in AWS KMS (`--kms-key-id`, poi `FEA_CA_KMS_KEY_ID` e `FEA_CA_CERT_PEM`). L'invi
 sceglie con `SMS_PROVIDER`: `console` scrive il codice nel log, `sns` usa AWS SNS. Il testo delle
 condizioni del servizio (`app/services/fea.py`) va validato da un legale prima dell'uso.
 
+## Documenti d'identita' dei clienti
+
+Per le persone fisiche lo studio archivia la copia della carta d'identita' o del passaporto e la
+piattaforma ne legge i dati per compilare l'anagrafica (`app/routers/documenti_identita.py`,
+pagine nella scheda del cliente e in "Nuovo cliente").
+
+- Lettura tutta in locale con Tesseract (`app/services/lettura_documenti.py`): dalla zona a
+  lettura ottica (MRZ) del retro della CIE o del passaporto si ricavano cognome, nome, data di
+  nascita, sesso, numero e scadenza. Numero e date si accettano solo se tornano le cifre di
+  controllo ICAO; sul testo stampato si cerca anche il codice fiscale (carattere di controllo
+  verificato). I dati letti si confrontano col codice fiscale del cliente e restano una proposta:
+  l'operatore li conferma sul documento originale. Le vecchie carte cartacee e la patente non hanno
+  MRZ: si archiviano e si compilano a mano. `POST /documenti-identita/lettura` legge senza salvare.
+- Le copie sono cifrate nell'applicazione con AES-256-GCM, una chiave dati per copia legata a
+  studio e documento (`app/services/cifratura.py`). In produzione la chiave principale e' in AWS
+  KMS (`DOCUMENTI_KMS_KEY_ID`); altrove si usa `DOCUMENTI_CHIAVE` (32 byte in base64) o, in
+  sviluppo, una chiave derivata da `SECRET_KEY`. Passando a KMS le copie gia' salvate restano
+  leggibili finche' la chiave locale resta configurata. Nel database l'esito della lettura si
+  conserva senza dati personali; ogni apertura, caricamento e cancellazione va nell'audit log.
+- Conservazione: le copie dell'archivio si cancellano dalla scheda o con
+  `uv run python -m app.cli elimina-documenti-scaduti --mesi 12`. All'adesione FEA si puo'
+  riusare la copia archiviata: diventa evidenza dell'adesione e da li' si conserva vent'anni,
+  indipendentemente dall'archivio.
+
 ## Produzione
 
 Infrastruttura Terraform per AWS Milano e guida al primo deploy in

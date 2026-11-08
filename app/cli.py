@@ -41,6 +41,42 @@ def create_tenant(
 
 
 @cli.command()
+def elimina_documenti_scaduti(
+    mesi: int = typer.Option(12, help="Mesi trascorsi dalla scadenza del documento"),
+    prova: bool = typer.Option(False, help="Elenca soltanto, senza eliminare"),
+) -> None:
+    """Elimina le copie archiviate dei documenti d'identita' scaduti da piu' di N mesi.
+
+    Le copie usate per un'adesione FEA restano nell'adesione: la conservazione ventennale non
+    dipende da questo archivio.
+    """
+    from datetime import timedelta
+
+    from app import clock
+    from app.audit import record
+    from app.models import DocumentoIdentita
+
+    limite = clock.oggi() - timedelta(days=round(mesi * 30.44))
+    with SessionLocal() as db:
+        scaduti = list(
+            db.scalars(select(DocumentoIdentita).where(DocumentoIdentita.scadenza < limite))
+        )
+        for doc in scaduti:
+            if not prova:
+                record(
+                    db,
+                    "documento_identita_eliminato",
+                    tenant_id=doc.tenant_id,
+                    entity_type="documento_identita",
+                    entity_id=doc.id,
+                    details={"motivo": f"scaduto da oltre {mesi} mesi"},
+                )
+                db.delete(doc)
+        db.commit()
+    typer.echo(f"{'Da eliminare' if prova else 'Eliminati'}: {len(scaduti)} documenti")
+
+
+@cli.command()
 def crea_ca_fea(
     denominazione: str = typer.Option(..., help="Nome dello studio o del gestore del servizio"),
     kms_key_id: str | None = typer.Option(
