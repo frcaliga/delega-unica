@@ -83,6 +83,17 @@ data "aws_iam_policy_document" "task" {
   }
 
   statement {
+    # RDS ruota la password del database: l'applicazione la rilegge quando cambia
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [local.segreto_db]
+  }
+
+  statement {
+    actions   = ["kms:Decrypt"]
+    resources = [aws_kms_key.dati.arn]
+  }
+
+  statement {
     # L'invio diretto a un numero di telefono non ha una risorsa SNS a cui limitarlo
     actions   = ["sns:Publish"]
     resources = ["*"]
@@ -134,6 +145,7 @@ resource "aws_ecs_task_definition" "applicazione" {
         { name = "DB_HOST", value = aws_db_instance.database.address },
         { name = "DB_NAME", value = aws_db_instance.database.db_name },
         { name = "DB_USER", value = aws_db_instance.database.username },
+        { name = "DB_PASSWORD_SECRET_ARN", value = local.segreto_db },
         { name = "REQUIRE_MFA", value = "true" },
         { name = "AWS_REGION", value = var.regione },
         { name = "FEA_CA_KMS_KEY_ID", value = aws_kms_key.ca_fea.arn },

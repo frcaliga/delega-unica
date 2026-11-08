@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     db_name: str = "delega"
     db_user: str = "delega"
     db_password: str | None = None
+    # ARN del segreto RDS: se valorizzato, la password si rilegge da li' quando RDS la ruota
+    db_password_secret_arn: str | None = None
     secret_key: str = "dev-only-secret-key-change-me-0123456789"
     access_token_minutes: int = 30
     mfa_token_minutes: int = 5
