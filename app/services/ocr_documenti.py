@@ -22,6 +22,7 @@ import re
 import sys
 from collections import Counter
 from collections.abc import Callable, Iterable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import date
 from difflib import SequenceMatcher
@@ -226,10 +227,17 @@ def ocr_words(img: np.ndarray, scale: float, variant: str, psm: int = 11) -> tup
     return words, "\n".join(" ".join(v) for v in lines.values())
 
 
+# Tesseract gira in processi separati: le varianti di una pagina si leggono in parallelo
+OCR_PARALLELO = max(1, min(4, os.cpu_count() or 1))
+
+
 def ocr_page(rgb: np.ndarray) -> PageOCR:
     page = PageOCR(rgb)
-    for name, img, k in make_variants(rgb):
-        page.words[name], page.texts[name] = ocr_words(img, k, name)
+    varianti = make_variants(rgb)
+    with ThreadPoolExecutor(OCR_PARALLELO) as pool:
+        letture = list(pool.map(lambda v: ocr_words(v[1], v[2], v[0]), varianti))
+    for (name, _, _), (words, text) in zip(varianti, letture):
+        page.words[name], page.texts[name] = words, text
     return page
 
 
@@ -254,7 +262,7 @@ def ocr_crop(
     if crop.size == 0:
         return []
     gray = cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY)
-    out = []
+    lavori = []
     for k in scales:
         g = cv2.resize(gray, None, fx=k, fy=k, interpolation=cv2.INTER_CUBIC) if k != 1 else gray
         o = cv2.threshold(
@@ -262,9 +270,18 @@ def ocr_crop(
         )[1]
         for im in (g, o):
             for p in psms or (psm,):
-                cfg = f"--psm {p} -c tessedit_char_whitelist={whitelist}"
-                out.append(pytesseract.image_to_string(im, lang=TESS_LANG, config=cfg))
-    return out
+                lavori.append((im, f"--psm {p} -c tessedit_char_whitelist={whitelist}"))
+    return _in_parallelo(lavori)
+
+
+def _in_parallelo(lavori: list[tuple[np.ndarray, str]]) -> list[str]:
+    """Esegue Tesseract sulle immagini (immagine, configurazione) in parallelo, in ordine."""
+    with ThreadPoolExecutor(OCR_PARALLELO) as pool:
+        return list(
+            pool.map(
+                lambda la: pytesseract.image_to_string(la[0], lang=TESS_LANG, config=la[1]), lavori
+            )
+        )
 
 
 def ocr_region(
@@ -275,16 +292,14 @@ def ocr_region(
     if crop.size == 0:
         return []
     mx = crop.max(axis=2).astype(np.uint8)
-    out = []
+    lavori = []
     for k in scales:
         g = cv2.resize(mx, None, fx=k, fy=k, interpolation=cv2.INTER_CUBIC)
         for t in thresholds:
             b = cv2.medianBlur(np.where(g < t, 0, 255).astype(np.uint8), 3)
             b = cv2.copyMakeBorder(b, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
-            out.append(
-                pytesseract.image_to_string(b, lang=TESS_LANG, config=f"--psm {psm}").strip()
-            )
-    return out
+            lavori.append((b, f"--psm {psm}"))
+    return [t.strip() for t in _in_parallelo(lavori)]
 
 
 def label_boxes(page: PageOCR, keyword: str, thr: float = 0.8) -> list[Word]:
@@ -1625,10 +1640,10 @@ def process_pages(
     rgbs: list[np.ndarray], comuni: dict | None, verbose: bool = False, nome: str = ""
 ) -> dict:
     pages = []
-    for rgb in rgbs:
-        rgb = fix_orientation(rgb)
-        page = ocr_page(rgb)
-        pages.append(page)
+    with ThreadPoolExecutor(OCR_PARALLELO) as pool:
+        raddrizzate = list(pool.map(fix_orientation, rgbs))
+    for rgb in raddrizzate:
+        pages.append(ocr_page(rgb))
     kind = classify(pages)
     if verbose:
         for i, p in enumerate(pages):

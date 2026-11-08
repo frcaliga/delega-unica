@@ -74,6 +74,10 @@ table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
 th, td { text-align: left; padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--bordo); vertical-align: top; }
 th { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--tenue); font-weight: 600; }
 td small { color: var(--tenue); }
+/* Sui telefoni le tabelle scorrono dentro il riquadro invece di essere tagliate */
+@media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+.indicatore { display: none; color: var(--tenue); font-size: 0.9rem; }
+.indicatore.htmx-request { display: inline; }
 .azioni-riga { white-space: nowrap; text-align: right; }
 
 form { margin: 0; }

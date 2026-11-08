@@ -12,7 +12,8 @@
       <label class="campo"><span>Documento d'identita' (facoltativo)</span>
         <input type="file" name="copia" accept="application/pdf,image/jpeg,image/png" multiple>
         <small>Persone fisiche: un PDF con fronte e retro, oppure due foto anche dal telefono. CIE, carta cartacea, passaporto o tessera sanitaria, fino a 10 MB. La copia viene conservata cifrata.</small></label>
-      <button type="button" class="secondario" hx-post="/studio/clienti/nuovo/leggi" hx-encoding="multipart/form-data" hx-include="closest form" hx-target="#campi-nuovo-cliente" hx-swap="outerHTML">Leggi i dati dal documento</button>
+      <button type="button" class="secondario" hx-post="/studio/clienti/nuovo/leggi" hx-indicator="#lettura-in-corso" hx-disabled-elt="this" hx-encoding="multipart/form-data" hx-include="closest form" hx-target="#campi-nuovo-cliente" hx-swap="outerHTML">Leggi i dati dal documento</button>
+        <span id="lettura-in-corso" class="indicatore" role="status">Lettura in corso, qualche secondo&hellip;</span>
     </div>
     {% include "_nuovo_cliente_campi.html" %}
     <div class="azioni"><button type="submit">Salva cliente</button><a href="/studio/clienti">Annulla</a></div>
