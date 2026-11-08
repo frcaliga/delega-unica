@@ -48,6 +48,11 @@ variable "sms_mittente" {
   default     = "DelegaUnica"
 }
 
+variable "email_allarmi" {
+  description = "Indirizzo che riceve gli allarmi del servizio"
+  type        = string
+}
+
 variable "soggetti_github" {
   description = "Repository GitHub autorizzati a caricare le immagini, nel formato del soggetto OIDC"
   type        = list(string)
