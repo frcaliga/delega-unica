@@ -127,12 +127,13 @@ locals {
   segreto_db = aws_db_instance.database.master_user_secret[0].secret_arn
 }
 
+# 1 vCPU: la lettura dei documenti d'identita' (Tesseract) usa piu' processori in parallelo
 resource "aws_ecs_task_definition" "applicazione" {
   family                   = var.nome
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 512
-  memory                   = 1024
+  cpu                      = 1024
+  memory                   = 2048
   execution_role_arn       = aws_iam_role.esecuzione.arn
   task_role_arn            = aws_iam_role.task.arn
 
