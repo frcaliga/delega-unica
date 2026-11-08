@@ -1,12 +1,19 @@
 """Adattatori AWS (KMS, SNS) provati con client finti che imitano le API di boto3."""
 
+import json
+import os
+
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa, utils
-from sqlalchemy import make_url
+from sqlalchemy import create_engine, make_url, text
+from sqlalchemy.pool import NullPool
 
+from app import db
 from app.config import Settings
 from app.services import ca_fea, cades, sms
 from tests.helpers import MARIO
+
+TEST_DATABASE_URL = "postgresql+psycopg://delega:delega@localhost:5432/delega_test"
 
 
 class KmsFinto:
@@ -103,3 +110,40 @@ def test_comando_crea_ca_fea_con_kms(monkeypatch):
     cert = x509.load_pem_x509_certificate(res.output.encode())
     assert cert.subject == cert.issuer
     ca_fea.carica_autorita_kms(res.output.encode(), kms, "alias/ca")
+
+
+class SecretsManagerFinto:
+    """Segreto gestito da RDS: un JSON con utente e password."""
+
+    def __init__(self, password):
+        self.password = password
+        self.letture = 0
+
+    def get_secret_value(self, SecretId):
+        self.letture += 1
+        return {"SecretString": json.dumps({"username": "delega", "password": self.password})}
+
+
+def _engine_con_password(password_iniziale):
+    url = make_url(os.environ.get("TEST_DATABASE_URL", TEST_DATABASE_URL))
+    segreto = SecretsManagerFinto(url.password)
+    engine = create_engine(url.set(password=password_iniziale), poolclass=NullPool)
+    db.usa_password_ruotata(engine, db.PasswordDaSegreto(segreto, "arn:segreto", password_iniziale))
+    return engine, segreto
+
+
+def test_password_ruotata_da_rds():
+    # Il container e' partito con la password di prima della rotazione
+    engine, segreto = _engine_con_password("password-di-prima")
+    for _ in range(2):
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT 1")).scalar() == 1
+    assert segreto.letture == 1
+
+
+def test_password_corrente_senza_letture():
+    url = make_url(os.environ.get("TEST_DATABASE_URL", TEST_DATABASE_URL))
+    engine, segreto = _engine_con_password(url.password)
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT 1")).scalar() == 1
+    assert segreto.letture == 0
