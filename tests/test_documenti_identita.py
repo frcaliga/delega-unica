@@ -432,11 +432,14 @@ def test_fronte_e_retro_in_due_foto(client, headers, mario):
 
 def test_elenco_comuni_istat_in_windows_1252(tmp_path):
     righe = (
-        "Codice Comune;Denominazione in italiano;Sigla automobilistica;"
-        "Codice Catastale del comune\n"
-        "001;Forlì;FC;D704\n"
+        "Codice Comune;Denominazione (Italiana e straniera);Denominazione in italiano;"
+        "Sigla automobilistica;Codice Catastale del comune\n"
+        "001;Forlì;Forlì;FC;D704\n"
+        "002;Bolzano/Bozen;Bolzano;BZ;A952\n"
     )
     for codifica in ("cp1252", "utf-8-sig"):
         f = tmp_path / f"comuni-{codifica}.csv"
         f.write_bytes(righe.encode(codifica))
-        assert ocr_documenti.load_comuni(f)["D704"] == ("Forlì", "FC")
+        elenco = ocr_documenti.load_comuni(f)
+        assert elenco["D704"] == ("Forlì", "FC")
+        assert elenco["A952"] == ("Bolzano", "BZ")

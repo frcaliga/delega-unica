@@ -1728,7 +1728,11 @@ def load_comuni(path: Path) -> dict:
     rows = list(csv.reader(text.splitlines(), delimiter=";" if ";" in text[:2000] else ","))
     head = [h.lower() for h in rows[0]]
     i_cod = next(i for i, h in enumerate(head) if "catastale" in h)
-    i_nom = next(i for i, h in enumerate(head) if "denominazione" in h)
+    # Il nome italiano, non "Italiana e straniera" (che per i bilingui da' "Bolzano/Bozen")
+    i_nom = next(
+        (i for i, h in enumerate(head) if "denominazione in italiano" in h),
+        next(i for i, h in enumerate(head) if "denominazione" in h),
+    )
     i_sig = next((i for i, h in enumerate(head) if "sigla" in h), None)
     return {
         r[i_cod].strip().upper(): (r[i_nom].strip(), r[i_sig].strip() if i_sig is not None else "")
