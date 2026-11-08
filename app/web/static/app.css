@@ -171,3 +171,11 @@ pre.dichiarazione { font-family: inherit; font-size: 0.95rem; }
   .testata nav { order: 3; flex-basis: 100%; }
   .contenuto { padding: 1rem; }
 }
+
+/* Fronte e retro del documento */
+.anteprima-documento { margin: 0.75rem 0; }
+.anteprima-documento img, .anteprima-archivio { display: block; max-width: 100%; height: auto; border: 1px solid var(--bordo); border-radius: var(--raggio); background: #fff; }
+.anteprima-documento figcaption { font-size: 0.85rem; color: var(--tenue); margin-top: 0.3rem; }
+.anteprima-archivio { margin-top: 0.5rem; }
+tr.riga-anteprima td { border-top: none; padding-top: 0; }
+tr:has(+ tr.riga-anteprima) td { border-bottom: none; }

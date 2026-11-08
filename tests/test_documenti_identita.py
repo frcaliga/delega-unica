@@ -465,3 +465,23 @@ def test_nuovo_cliente_altro_documento_svuota_i_campi_letti_prima(browser):
     assert res.status_code == 200, res.text
     assert MARIO not in res.text and 'value="Rossi"' not in res.text
     assert 'value="+393331234567"' in res.text  # scritto a mano: resta
+
+
+@tesseract
+def test_anteprima_di_fronte_e_retro(browser, db):
+    copia = _copia_mario()
+    letti = browser.post("/studio/clienti/nuovo/leggi", {}, files=copia, htmx="campi-nuovo-cliente")
+    assert 'src="data:image/jpeg;base64,' in letti.text
+
+    dati = {"codice_fiscale": MARIO, "cognome": "Rossi", "nome": "Mario", "documento_tipo": "1"}
+    res = browser.post("/studio/clienti/nuovo", dati, files=copia)
+    assert res.status_code == 303, res.text
+    doc = db.scalars(select(DocumentoIdentita)).one()
+    scheda = browser.get(res.headers["location"].split("?")[0])
+    assert f"/studio/documenti/{doc.id}/anteprima.jpg" in scheda.text
+    img = browser.get(f"/studio/documenti/{doc.id}/anteprima.jpg")
+    assert img.status_code == 200 and img.headers["content-type"] == "image/jpeg"
+    assert img.headers["cache-control"] == "no-store"
+    assert Image.open(io.BytesIO(img.content)).width <= 1000
+    motivi = [a.details.get("motivo") for a in db.scalars(select(AuditLog))]
+    assert "anteprima" in motivi

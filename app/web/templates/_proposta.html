@@ -9,3 +9,9 @@
 </div>
 {% endif %}
 {% endif %}
+{% if anteprima %}
+<figure class="anteprima-documento">
+  <img src="{{ anteprima }}" alt="Fronte e retro del documento caricato">
+  <figcaption>Il documento caricato: confrontare i dati letti con l'immagine.</figcaption>
+</figure>
+{% endif %}
