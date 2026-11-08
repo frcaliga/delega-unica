@@ -162,9 +162,7 @@ async def leggi(
     """Frammento HTMX: avvia la lettura del documento caricato nella scheda."""
     cliente = api_clienti.get_cliente(db, user, cliente_id)
     poll = f"/studio/clienti/{cliente.id}/documenti/lettura"
-    return await _avvia_lettura(
-        request, db, portachiavi, user, copia, cliente.codice_fiscale, poll
-    )
+    return await _avvia_lettura(request, db, portachiavi, user, copia, cliente.codice_fiscale, poll)
 
 
 @router.post("/clienti/{cliente_id}/documenti/lettura", response_class=HTMLResponse)
