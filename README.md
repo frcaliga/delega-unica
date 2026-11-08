@@ -47,8 +47,9 @@ pagine nella scheda del cliente e in "Nuovo cliente").
   traduce l'esito in dati tipizzati e segnala cosa non e' verificato da una cifra di controllo.
 - I dati letti (anche luogo di nascita e comune di rilascio dal fronte della CIE) si confrontano
   col codice fiscale del cliente e restano una proposta: l'operatore li conferma sull'originale.
-  La patente non e' riconosciuta: si archivia e si compila a mano. Con `COMUNI_CSV_PATH` (elenco
-  ISTAT dei comuni) i nomi dei comuni letti male vengono corretti. `POST /documenti-identita/lettura`
+  La patente non e' riconosciuta: si archivia e si compila a mano. Con l'elenco ISTAT dei comuni
+  incluso in `app/dati/comuni.csv` (o un altro indicato da `COMUNI_CSV_PATH`) i nomi dei comuni
+  letti male vengono corretti; si aggiorna riscaricando `Elenco-comuni-italiani.csv` dall'ISTAT. `POST /documenti-identita/lettura`
   legge senza salvare.
 - Le copie sono cifrate nell'applicazione con AES-256-GCM, una chiave dati per copia legata a
   studio e documento (`app/services/cifratura.py`). In produzione la chiave principale e' in AWS

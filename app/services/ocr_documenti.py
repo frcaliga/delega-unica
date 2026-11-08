@@ -1720,11 +1720,11 @@ def cross_checks(docs: list[dict]) -> tuple[dict, list[str]]:
 def load_comuni(path: Path) -> dict:
     """Legge il CSV ISTAT 'Elenco-comuni-italiani.csv' -> {codice_catastale: (nome, sigla)}."""
     raw = path.read_bytes()
-    text = raw.decode("utf-8") if raw[:3] != b"\xef\xbb\xbf" else raw[3:].decode("utf-8")
+    # Il file ISTAT e' in Windows-1252; le copie risalvate possono essere in UTF-8 con BOM
     try:
-        raw.decode("utf-8")
+        text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
-        text = raw.decode("latin-1")
+        text = raw.decode("cp1252", errors="replace")
     rows = list(csv.reader(text.splitlines(), delimiter=";" if ";" in text[:2000] else ","))
     head = [h.lower() for h in rows[0]]
     i_cod = next(i for i, h in enumerate(head) if "catastale" in h)

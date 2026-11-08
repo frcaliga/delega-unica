@@ -58,15 +58,18 @@ class Lettura:
         return self.mrz_verificata or (self.riconosciuto == "TS" and bool(self.codice_fiscale))
 
 
+COMUNI_INCLUSI = Path(__file__).resolve().parent.parent / "dati" / "comuni.csv"
+
+
 @lru_cache
 def comuni() -> dict | None:
-    """Elenco ISTAT dei comuni, se configurato: corregge i nomi letti male."""
-    percorso = get_settings().comuni_csv_path
-    if not percorso or not Path(percorso).is_file():
+    """Elenco ISTAT dei comuni (quello configurato o quello incluso): corregge i nomi letti male."""
+    percorso = Path(get_settings().comuni_csv_path or COMUNI_INCLUSI)
+    if not percorso.is_file():
         return None
     from app.services import ocr_documenti
 
-    return ocr_documenti.load_comuni(Path(percorso))
+    return ocr_documenti.load_comuni(percorso)
 
 
 def _data(valore: str | None) -> date | None:

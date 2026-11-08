@@ -48,7 +48,8 @@ class Settings(BaseSettings):
     # Produzione: chiave KMS. Altrimenti 32 byte in base64; se manca, derivata da SECRET_KEY.
     documenti_kms_key_id: str | None = None
     documenti_chiave: str | None = None
-    # Elenco ISTAT dei comuni (CSV): corregge i comuni letti dai documenti. Facoltativo.
+    # Elenco ISTAT dei comuni (CSV): corregge i comuni letti dai documenti. Se vuoto si usa
+    # quello incluso nell'app (app/dati/comuni.csv); serve solo per usarne uno piu' recente.
     comuni_csv_path: str | None = None
 
     @model_validator(mode="after")

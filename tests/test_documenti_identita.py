@@ -428,3 +428,15 @@ def test_fronte_e_retro_in_due_foto(client, headers, mario):
         f"/clienti/{mario['id']}/documenti-identita", headers=headers, files=pdf_e_foto
     )
     assert res.status_code == 422 and "PDF va caricato da solo" in res.text
+
+
+def test_elenco_comuni_istat_in_windows_1252(tmp_path):
+    righe = (
+        "Codice Comune;Denominazione in italiano;Sigla automobilistica;"
+        "Codice Catastale del comune\n"
+        "001;Forlì;FC;D704\n"
+    )
+    for codifica in ("cp1252", "utf-8-sig"):
+        f = tmp_path / f"comuni-{codifica}.csv"
+        f.write_bytes(righe.encode(codifica))
+        assert ocr_documenti.load_comuni(f)["D704"] == ("Forlì", "FC")
