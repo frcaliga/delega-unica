@@ -3,8 +3,9 @@
 La lettura impegna la CPU per decine di secondi, troppo per una richiesta HTTP dietro il
 bilanciatore. La pagina avvia la lettura e ne chiede l'esito ogni pochi secondi. Le letture girano
 una alla volta per container, cosi' il sito resta reattivo. L'esito (dati letti e anteprima) e'
-cifrato nel database, perche' la richiesta successiva puo' arrivare a un altro container; la riga
-si cancella appena l'esito e' consegnato, o dopo un'ora.
+cifrato nel database, perche' la richiesta successiva puo' arrivare a un altro container. Anche la
+copia caricata resta, cifrata, per salvarla con il cliente senza ricaricarla ne' rileggerla. La
+riga si cancella al salvataggio o dopo un'ora.
 """
 
 import json
@@ -66,6 +67,13 @@ def crea(
     lettura = LetturaDocumento(
         id=uuid.uuid4(), tenant_id=user.tenant_id, user_id=user.id, stato="in_corso"
     )
+    busta = portachiavi.cifra(copia.dati, lettura.contesto_copia())
+    lettura.copia_cifratura = busta.schema
+    lettura.copia_chiave = busta.chiave_cifrata
+    lettura.copia_cifrata = busta.dati
+    lettura.copia_tipo = copia.tipo
+    lettura.copia_nome = copia.nome
+    lettura.copia_impronta = copia.impronta
     db.add(lettura)
     db.commit()
     contesto = lettura.contesto()
@@ -114,6 +122,8 @@ def esito(db: Session, portachiavi: Portachiavi, user: User, lettura_id: uuid.UU
     if lettura is None:
         return Esito("assente")
     secondi = int((_ora() - lettura.created_at).total_seconds())
+    if lettura.stato in ("consegnata", "chiusa"):
+        return Esito("assente")
     if lettura.stato == "in_corso":
         if secondi > PERSA_DOPO.total_seconds():
             db.delete(lettura)
@@ -121,9 +131,11 @@ def esito(db: Session, portachiavi: Portachiavi, user: User, lettura_id: uuid.UU
             return Esito("errore", secondi=secondi)
         return Esito("in_corso", secondi=secondi)
     dati = json.loads(portachiavi.decifra(lettura.busta, lettura.contesto()) or b"{}")
-    db.delete(lettura)
+    riuscita = lettura.stato == "pronta" and bool(dati.get("proposta"))
+    # L'esito si consegna una volta; copia ed esito restano per il salvataggio
+    lettura.stato = "consegnata" if riuscita else "chiusa"
     db.commit()
-    if lettura.stato != "pronta" or not dati.get("proposta"):
+    if not riuscita:
         return Esito("errore", secondi=secondi)
     return Esito(
         "pronta",
@@ -131,3 +143,55 @@ def esito(db: Session, portachiavi: Portachiavi, user: User, lettura_id: uuid.UU
         anteprima=dati.get("anteprima"),
         secondi=secondi,
     )
+
+
+def _mia(db: Session, user: User, lettura_id: str | None) -> LetturaDocumento | None:
+    try:
+        chiave = uuid.UUID(str(lettura_id))
+    except ValueError:
+        return None
+    return db.scalars(
+        select(LetturaDocumento).where(
+            LetturaDocumento.id == chiave,
+            LetturaDocumento.tenant_id == user.tenant_id,
+            LetturaDocumento.user_id == user.id,
+            LetturaDocumento.created_at >= _ora() - CONSERVATA_PER,
+        )
+    ).first()
+
+
+@dataclass
+class Letta:
+    copia: servizio.Copia
+    proposta: PropostaOut | None
+    impronta: str | None
+
+
+def letta(
+    db: Session, portachiavi: Portachiavi, user: User, lettura_id: str | None
+) -> Letta | None:
+    """La copia caricata con la lettura e i dati letti, per salvarla senza ricaricarla e senza
+    rileggerla."""
+    lettura = _mia(db, user, lettura_id)
+    if lettura is None or not lettura.copia_cifrata:
+        return None
+    dati = portachiavi.decifra(lettura.busta_copia, lettura.contesto_copia())
+    copia = servizio.Copia(dati, lettura.copia_tipo or "", lettura.copia_nome or "documento")
+    proposta = None
+    if lettura.stato == "consegnata" and lettura.esito_cifrato:
+        esito = json.loads(portachiavi.decifra(lettura.busta, lettura.contesto()) or b"{}")
+        if esito.get("proposta"):
+            proposta = PropostaOut.model_validate(esito["proposta"])
+    return Letta(copia, proposta, lettura.copia_impronta)
+
+
+def letta_valida(db: Session, user: User, lettura_id: str | None) -> bool:
+    """La copia della lettura c'e' ancora: il modulo ripresentato puo' continuare a usarla."""
+    lettura = _mia(db, user, lettura_id)
+    return lettura is not None and bool(lettura.copia_cifrata)
+
+
+def scarta(db: Session, user: User, lettura_id: str | None) -> None:
+    """Dopo il salvataggio la lettura (e la sua copia) non serve piu'."""
+    if (lettura := _mia(db, user, lettura_id)) is not None:
+        db.delete(lettura)

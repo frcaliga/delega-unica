@@ -1,0 +1,5 @@
+{# Copia gia' letta, conservata cifrata: al salvataggio non va ricaricata #}
+{% if lettura_copia %}
+<input type="hidden" name="lettura_copia" value="{{ lettura_copia }}">
+<p class="nota">La copia letta viene salvata con i dati: non serve caricarla di nuovo.</p>
+{% endif %}

@@ -35,6 +35,14 @@ class Copia:
     def sha256(self) -> str:
         return hashlib.sha256(self.dati).hexdigest()
 
+    @property
+    def impronta(self) -> str:
+        """Riconosce i file caricati: il PDF unito da due foto cambia a ogni unione."""
+        h = hashlib.sha256()
+        for parte in self.foto or [self.dati]:
+            h.update(hashlib.sha256(parte).digest())
+        return h.hexdigest()
+
 
 def controlla_copia(dati: bytes, tipo: str | None, nome: str | None) -> tuple[Copia | None, str]:
     """La copia accettata, oppure il motivo del rifiuto."""

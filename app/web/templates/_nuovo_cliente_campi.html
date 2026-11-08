@@ -1,7 +1,9 @@
 {# Anagrafica ed estremi del documento del nuovo cliente: si sostituisce con HTMX dopo la lettura #}
 {% import "_macro.html" as m with context %}
 <div id="campi-nuovo-cliente"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
-  <input type="hidden" name="campi_letti" value="{{ campi_letti or '' }}">
+  <input type="hidden" name="campi_letti" value="{{ campi_letti or dati.get('campi_letti') or '' }}">
+  {% set lettura_copia = lettura_copia or dati.get("lettura_copia") %}
+  {% include "_copia_letta.html" %}
   {{ m.errori(errori) }}
   {% include "_proposta.html" %}
   {% set nuovo = true %}{% set cliente = none %}

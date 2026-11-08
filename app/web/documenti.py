@@ -124,17 +124,19 @@ async def _archivia(
     user: User,
     cliente: Cliente,
     copia: servizio.Copia,
+    proposta: PropostaOut | None,
     estremi: dict,
     portachiavi: Portachiavi,
 ) -> DocumentoIdentita:
-    proposta = await api.leggi_proposta(copia, cliente.codice_fiscale)
+    # Gli estremi li conferma l'operatore: al salvataggio non si rilegge il documento, si usa
+    # l'esito della lettura fatta prima (se c'e'), che resta solo come riepilogo
     return api.salva(
         db,
         request,
         user,
         cliente,
         copia,
-        proposta,
+        proposta or PropostaOut(letta=False),
         portachiavi,
         tipo=TipoDocumento(estremi["documento_tipo"]),
         numero=estremi["documento_numero"],
@@ -145,6 +147,22 @@ async def _archivia(
             else None
         ),
     )
+
+
+async def _da_salvare(
+    db: Session, portachiavi: Portachiavi, user: User, form, scelti: list[UploadFile]
+) -> tuple[servizio.Copia | None, PropostaOut | None]:
+    """La copia da archiviare con l'esito della sua lettura: quella caricata ora, oppure quella
+    gia' letta, che non va ricaricata."""
+    letta = letture.letta(db, portachiavi, user, form.get("lettura_copia"))
+    if scelti:
+        file = await api.leggi_upload(scelti)
+        if letta is not None and letta.impronta == file.impronta:
+            return file, letta.proposta
+        return file, None
+    if letta is not None:
+        return letta.copia, letta.proposta
+    return None, None
 
 
 # Scheda del cliente
@@ -189,6 +207,7 @@ def lettura_scheda(
             "proposta": esito.proposta,
             "errori": None,
             "anteprima": esito.anteprima,
+            "lettura_copia": str(lettura),
             "oob": True,
         },
         user=user,
@@ -215,17 +234,25 @@ async def archivia(
         "sesso": vuoto_a_none(form.get("sesso")),
         "luogo_nascita": vuoto_a_none(form.get("luogo_nascita")),
     }
-    if not (scelti := _file(copia)):
-        errori.append("Scegliere il file con la copia del documento")
-    if not errori:
+    scelti = _file(copia)
+    lettura_copia = form.get("lettura_copia") or None
+    try:
+        file, proposta = await _da_salvare(db, portachiavi, user, form, scelti)
+    except HTTPException as exc:
+        file, proposta = None, None
+        errori += errori_da(exc)
+    else:
+        if file is None:
+            errori.append("Scegliere il file con la copia del documento")
+    if not errori and file is not None:
         try:
             api.solo_persone_fisiche(cliente)
             modifiche = {k: v for k, v in anagrafica.items() if v} if aggiorna else {}
             update = ClienteUpdate(**modifiche) if modifiche else None
-            file = await api.leggi_upload(scelti)
-            await _archivia(request, db, user, cliente, file, estremi, portachiavi)
+            await _archivia(request, db, user, cliente, file, proposta, estremi, portachiavi)
             if update is not None:
                 api_clienti.update_cliente(cliente.id, update, request=request, user=user, db=db)
+            letture.scarta(db, user, lettura_copia)
             db.commit()
         except (ValidationError, HTTPException) as exc:
             db.rollback()
@@ -236,6 +263,7 @@ async def archivia(
     contesto.update(
         dati_documento={**estremi, **anagrafica, "aggiorna_anagrafica": aggiorna},
         errori_documento=errori,
+        lettura_copia=lettura_copia if letture.letta_valida(db, user, lettura_copia) else None,
     )
     return pagina(
         request,
@@ -347,6 +375,7 @@ async def lettura_nuovo(
             "errori": None,
             "campi_letti": ",".join(letti),
             "anteprima": esito.anteprima,
+            "lettura_copia": str(lettura),
             "oob": True,
         },
         user=user,
@@ -365,20 +394,25 @@ async def crea_con_documento(
     dati = web_clienti.dati_modulo(form)
     estremi, errori = _estremi(form)
     scelti = _file(copia)
-    if errori and scelti:
-        return None, {**dati, **estremi}, errori
+    lettura_copia = form.get("lettura_copia") or None
+    # Se il modulo torna indietro, la copia gia' letta resta e i campi letti si riconoscono
+    rimanda = {**dati, **estremi, "campi_letti": form.get("campi_letti") or ""}
+    if letture.letta_valida(db, user, lettura_copia):
+        rimanda["lettura_copia"] = lettura_copia
+    if errori and (scelti or "lettura_copia" in rimanda):
+        return None, rimanda, errori
     try:
         body = ClienteIn(**dati)
-        file = None
-        if scelti:
-            # Il file e il tipo di soggetto si controllano prima di creare il cliente
-            file = await api.leggi_upload(scelti)
+        # Il file e il tipo di soggetto si controllano prima di creare il cliente
+        file, proposta = await _da_salvare(db, portachiavi, user, form, scelti)
+        if file is not None:
             api.solo_persone_fisiche(Cliente(codice_fiscale=body.codice_fiscale))
         cliente = api_clienti.create_cliente(body, request=request, user=user, db=db)
         if file is not None:
-            await _archivia(request, db, user, cliente, file, estremi, portachiavi)
+            await _archivia(request, db, user, cliente, file, proposta, estremi, portachiavi)
+            letture.scarta(db, user, lettura_copia)
             db.commit()
     except (ValidationError, HTTPException) as exc:
         db.rollback()
-        return None, {**dati, **estremi}, errori_da(exc)
+        return None, rimanda, errori_da(exc)
     return cliente, dati, []
