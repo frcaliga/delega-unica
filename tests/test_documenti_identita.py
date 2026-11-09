@@ -535,9 +535,66 @@ def test_lettura_in_background(browser, db, monkeypatch):
     assert riga.stato == "pronta" and b"Rossi" not in riga.esito_cifrato
     pronta = browser.post(url, {}, htmx="stato-lettura")
     assert 'value="Rossi"' in pronta.text
-    # consegnata una volta sola
-    assert db.scalars(select(LetturaDocumento)).first() is None
+    # consegnata una volta sola; la copia resta, cifrata, per il salvataggio
+    db.refresh(riga)
+    assert riga.stato == "consegnata" and riga.copia_cifrata
+    assert b"PNG" not in riga.copia_cifrata
     assert "Lettura non trovata" in browser.post(url, {}, htmx="stato-lettura").text
+    lettura_copia = re.search(r'name="lettura_copia" value="([^"]+)"', pronta.text).group(1)
+    assert lettura_copia == str(riga.id)
+
+    # Salvataggio senza ricaricare la copia e senza rileggerla
+    def non_rileggere(*a, **k):
+        raise AssertionError("al salvataggio il documento non si rilegge")
+
+    monkeypatch.setattr(lettura_documenti, "leggi", non_rileggere)
+    dati = {
+        "codice_fiscale": MARIO,
+        "cognome": "Rossi",
+        "nome": "Mario",
+        "documento_tipo": "1",
+        "lettura_copia": lettura_copia,
+    }
+    res = browser.post("/studio/clienti/nuovo", dati)
+    assert res.status_code == 303, res.text
+    assert res.headers["location"].startswith("/studio/clienti/")
+    doc = db.scalars(select(DocumentoIdentita)).one()
+    assert doc.lettura["documento"] is None and doc.copia_nome
+    assert db.scalars(select(LetturaDocumento)).first() is None
+
+
+def test_scheda_salva_la_copia_letta_e_la_ricarica_uguale(browser, db, monkeypatch):
+    from app.models import LetturaDocumento
+
+    cliente = browser.post(
+        "/studio/clienti/nuovo", {"codice_fiscale": MARIO, "cognome": "Rossi", "nome": "Mario"}
+    )
+    base = cliente.headers["location"].split("?")[0]
+    monkeypatch.setattr(
+        lettura_documenti,
+        "leggi",
+        lambda *a, **k: lettura_documenti.Lettura(numero="CA00000AA"),
+    )
+    copia = _copia_mario()
+    letti = _leggi(browser, f"{base}/documenti/leggi", {}, copia, "campi-documento")
+    lettura_copia = re.search(r'name="lettura_copia" value="([^"]+)"', letti.text).group(1)
+    monkeypatch.setattr(lettura_documenti, "leggi", lambda *a, **k: 1 / 0)
+    estremi = {"documento_tipo": "1", "documento_numero": "CA00000AA"}
+    # errore nel modulo: la copia letta resta proposta
+    errato = browser.post(
+        f"{base}/documenti",
+        {**estremi, "documento_scadenza": "ieri", "lettura_copia": lettura_copia},
+    )
+    assert errato.status_code == 422
+    assert f'name="lettura_copia" value="{lettura_copia}"' in errato.text
+    # lo stesso file ricaricato vale come la copia letta
+    res = browser.post(
+        f"{base}/documenti", {**estremi, "lettura_copia": lettura_copia}, files=copia
+    )
+    assert res.status_code == 303, res.text
+    doc = db.scalars(select(DocumentoIdentita)).one()
+    assert doc.numero == "CA00000AA"
+    assert db.scalars(select(LetturaDocumento)).first() is None
 
 
 def test_lettura_di_un_altro_utente_non_si_vede(browser, db, monkeypatch):

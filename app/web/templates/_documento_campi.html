@@ -3,6 +3,7 @@
 <div id="campi-documento"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
   {{ m.errori(errori) }}
   {% include "_proposta.html" %}
+  {% include "_copia_letta.html" %}
   {% set d = dati_documento %}
   <div class="riga">
     {{ m.scelta("documento_tipo", "Documento", TIPI_DOCUMENTO, d.get("documento_tipo") or "1", obbligatorio=true) }}
